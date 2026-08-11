@@ -12,15 +12,25 @@ related: [Specs/SleepBlock, Plans/SleepBlock]
 
 ## Overview
 
-Sleep Block is a two-crate Rust workspace. `sleep-block-core` owns every D-Bus
-interaction and all inhibitor state; `sleep-block-bin` renders that state through
-two independent surfaces — an `egui` window and a StatusNotifierItem tray icon.
+Sleep Block is a two-crate Rust workspace producing **two binaries**:
 
-The split exists for a concrete reason rather than tidiness: the inhibitor logic
-is testable headlessly against live D-Bus services, while the GUI is not testable
-in this environment at all (no compositor is reachable from the build sandbox).
-Keeping the mechanism in a GUI-free crate is what makes **AC-01** through
-**AC-05** possible.
+- `sleep-blockd` — the daemon. Owns every inhibitor and the tray icon.
+- `sleep-block` — the window. Owns nothing; a client of the daemon over D-Bus.
+
+The process split is not organisational preference. On Wayland a window cannot
+hide itself: `set_visible` is an empty function, un-minimising is explicitly
+ignored, and `focus_window` does nothing. So a tray icon has no way to bring a
+hidden window back within one process. Making the window a separate, disposable
+process turns "show the window" into "start the window", which needs no
+cooperation from the compositor at all.
+
+That forces the ownership split: a logind inhibitor lives exactly as long as its
+file descriptor, so a window holding one would release it the moment it closed —
+precisely what hide-to-tray must not do. The daemon therefore owns the locks and
+the window holds none.
+
+`sleep-block-core` remains GUI-free, which is what keeps the mechanism testable
+headlessly (**AC-01**–**AC-05**).
 
 This design is retrospective and documents the system as built.
 
@@ -45,26 +55,29 @@ This design is retrospective and documents the system as built.
 
 ```mermaid
 graph TD
-    subgraph bin["sleep-block-bin"]
-        Main[main.rs<br/>eframe entry point]
-        Window[App<br/>egui window]
-        Tray[SleepTray<br/>ksni StatusNotifierItem]
-        Watcher[watcher thread<br/>polls for change]
-    end
-
-    subgraph core["sleep-block-core"]
-        State[SleepBlock<br/>Arc-Mutex shared handle]
+    subgraph daemon["sleep-blockd (owns everything)"]
+        Service[Service<br/>D-Bus interface]
+        Tray[SleepTray<br/>StatusNotifierItem]
+        Watcher[watcher thread<br/>republishes the tray]
+        State[SleepBlock<br/>Arc-Mutex state]
         Inhibitor[Inhibitor<br/>logind, system bus]
         Screen[ScreenInhibitor<br/>ScreenSaver, session bus]
     end
 
-    Logind[["systemd-logind<br/>org.freedesktop.login1"]]
-    Saver[["kwin / screen locker<br/>org.freedesktop.ScreenSaver"]]
-    Host[["StatusNotifierItem host<br/>e.g. Plasma tray"]]
+    subgraph gui["sleep-block (owns nothing)"]
+        App[App<br/>egui window]
+        Client[DaemonClient<br/>uncached proxy]
+        Waker[waker thread<br/>forces repaints]
+    end
 
-    Main --> Window
-    Main --> Tray
-    Window --> State
+    Logind[["systemd-logind"]]
+    Saver[["kwin / screen locker"]]
+    Host[["StatusNotifierItem host"]]
+
+    App --> Client
+    Waker -.->|request_repaint| App
+    Client -->|"D-Bus: net.phantomnet.SleepBlock1"| Service
+    Service --> State
     Tray --> State
     Watcher --> State
     Watcher -.->|Handle::update| Tray
@@ -73,10 +86,13 @@ graph TD
     Inhibitor -->|Inhibit → fd| Logind
     Screen -->|Inhibit → cookie| Saver
     Tray -.->|publishes icon| Host
+    Service -.->|spawns| App
+
 ```
 
-`SleepBlock` is the single source of truth (**FR-09**). Both surfaces hold clones
-of the same handle, not copies of the locks.
+`SleepBlock` remains the single source of truth (**FR-09**), but it now lives
+only in the daemon. The window reaches it over D-Bus and caches nothing
+authoritative — the daemon is always asked.
 
 ### Data Flow
 
@@ -110,19 +126,32 @@ sequenceDiagram
     S->>S: render new state
 ```
 
-Propagation to the *other* surface differs by direction, and this asymmetry is
-the subtlest part of the design:
+Propagation between the two surfaces is where this design has failed most
+often, so it is worth stating precisely. Both directions are **polling**, not
+push:
 
 ```mermaid
 flowchart LR
-    subgraph fromwin["Window → Tray"]
-        W[window toggles] --> WU["calls Handle::update"] --> WP[tray republishes]
+    subgraph d["Daemon → tray"]
+        DS[state changes] --> DW["watcher thread<br/>polls every 250ms"] --> DU["Handle::update"] --> DP[tray republishes]
     end
-    subgraph fromtray["Tray → Window"]
-        T[tray toggles] --> TW[watcher notices change] --> TU["calls Handle::update"] --> TP[tray republishes]
-        T --> TR[window repaints on 1s timer]
+    subgraph g["Daemon → window"]
+        GS[state changes] --> GW["window reads properties<br/>every frame, uncached"] --> GR[window repaints]
     end
 ```
+
+Two mechanisms make the window half work, and both were bugs before they were
+features:
+
+- **Uncached reads.** zbus caches properties and refreshes them from
+  `PropertiesChanged`. When that refresh does not land, the window serves its
+  first reading forever while every other surface is correct. The window
+  re-reads every frame anyway, so the cache saved nothing and cost correctness
+  (**NFR-08**).
+- **A waker thread.** `request_repaint_after` only schedules a timeout, which an
+  unfocused window may not service promptly — and the window is unfocused by
+  definition while the user is clicking the tray. A thread calling
+  `request_repaint` unconditionally cannot be starved that way.
 
 ### Interfaces
 
@@ -155,12 +184,21 @@ Where each requirement is realised in this design:
 | **FR-11**, **FR-12** | Error table below: failures leave prior state intact; screen-lock failure retains sleep blocking. |
 | **FR-13** | `SleepTray::start` returns `None` and the window continues alone. |
 | **FR-14**, **FR-15** | Packaging: desktop entry plus hicolor icons, staged into a binary RPM. |
+| **FR-16** | `sleep-blockd` owns `SleepBlock`, the tray, and both inhibitors. |
+| **FR-17** | `DaemonClient::connect` starts a daemon when none answers. |
+| **FR-18** | Bus-name ownership: `net.phantomnet.SleepBlock1` for the daemon, `…​.Gui` for the window; the loser exits. |
+| **FR-19** | Closing the window exits that process only; the tray's "Show window" starts a new one. |
+| **FR-20** | A failed property read marks the daemon gone and the window closes. |
+| **FR-21** | Uncached property reads plus the waker thread; see the propagation diagram. |
+| **FR-22** | `Release` derived from `git describe`: `1` on a tag, `1.<commits>.git<sha>` after it. |
 | **NFR-01** | Pure-Rust dependency set; see Decision 5 and the Constraints in the spec. |
 | **NFR-02**, **NFR-03** | Two icon states differing in colour and saturation, verified at 22px on both backgrounds. |
 | **NFR-04** | Indicator uses fill/outline and text alongside colour. |
 | **NFR-05** | Release profile: fat LTO, `codegen-units = 1`, symbols stripped. |
 | **NFR-06** | `snapshot` returns `Status` by value; no guard escapes. |
 | **NFR-07** | `make check` gates `make package` on tests, clippy, fmt, and desktop validation. |
+| **NFR-08** | Every mutating method announces all four properties; the window reads uncached besides. |
+| **NFR-09** | `Containerfile` carries both toolchains; `make package` builds native and cross in one run. |
 
 ## Design Decisions
 
@@ -273,6 +311,55 @@ icons were installed or the running icon theme resolves the name, so embedding
 removes a runtime failure mode. The desktop entry cannot embed anything, so it
 resolves `Icon=sleep-block` from hicolor, which the package populates
 (**FR-14**). The two mechanisms serve different consumers.
+
+### Decision 7: Split the daemon from the window
+
+**Context:** Hide-to-tray requires the application to survive its window
+closing. Three single-process approaches were tried and all failed.
+
+**Options Considered:**
+1. `ViewportCommand::Visible(false)` — winit's `set_visible` is an empty
+   function on Wayland (`// Not possible on Wayland.`). The close was cancelled,
+   so the process survived, but the window stayed on screen.
+2. Minimise instead of hide — `set_minimized` works, but un-minimising is
+   explicitly ignored on Wayland and `focus_window` is empty, so the tray could
+   never restore the window.
+3. Move the UI into a child viewport and destroy it — this *does* hide the
+   window, confirmed with a standalone probe. But eframe always creates a root
+   window and it cannot be hidden either, leaving an empty grey window on screen.
+4. Two processes: a daemon owning the locks, and a disposable window.
+
+**Decision:** Option 4.
+
+**Rationale:** Options 1–3 all founder on the same fact: a Wayland window cannot
+be hidden or raised by its own process. Option 4 sidesteps the problem instead
+of fighting it — "show the window" becomes "start the window", which needs no
+compositor cooperation. The cost is real (two binaries, an IPC contract, the
+locks migrating to the daemon), and it would be the wrong trade for an
+application that did not need to outlive its window. Here that is the entire
+feature.
+
+Worth recording: this is *not* the conventional answer. GTK and Qt applications
+do hide-to-tray in one process, because their `hide()` destroys and recreates
+the surface — which is what option 3 imitates. The blocker is specifically
+eframe's mandatory root window, not Wayland alone.
+
+### Decision 8: The daemon is authoritative; the window caches nothing
+
+**Context:** With two processes, the window could hold a mirror of the state or
+ask the daemon each time.
+
+**Options Considered:**
+1. Mirror the state in the window, synchronised by signals.
+2. Read from the daemon on every frame, uncached.
+
+**Decision:** Option 2.
+
+**Rationale:** A mirror has to be invalidated correctly, and every failure in
+this feature has been an invalidation failure — a stale zbus property cache
+twice, and a stale within-frame snapshot twice more. The window redraws about
+once a second, so a property read per frame is free by comparison. Removing the
+cache removed the whole class of bug rather than fixing instances of it.
 
 ## Error Handling
 

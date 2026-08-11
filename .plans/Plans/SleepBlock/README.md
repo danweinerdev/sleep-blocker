@@ -27,6 +27,11 @@ phases:
     status: in-progress
     doc: "04-Packaging.md"
     depends_on: [3]
+  - id: 5
+    title: "Daemon Split and State Synchronisation"
+    status: in-progress
+    doc: "05-Daemon-Split-And-Sync.md"
+    depends_on: [4]
 ---
 
 # Sleep Block — Implementation Plan
@@ -61,6 +66,13 @@ Decided during planning:
   using the local toolchain; a mock or COPR build is deferred (see **Q-03**).
 - **No notification machinery in the core crate.** The tray polls instead.
 
+Revised in Phase 5:
+
+- **The single-process design was abandoned.** It is impossible to hide or raise
+  a window from within its own process on Wayland, so hide-to-tray required
+  splitting the daemon from the window. The earlier note that this plan delivers
+  a single binary no longer holds.
+
 ## Architecture
 
 Two crates: a GUI-free core owning D-Bus and state, and a binary crate owning
@@ -71,6 +83,7 @@ graph LR
     P1[Phase 1<br/>Core inhibitors<br/>+ integration tests] --> P2[Phase 2<br/>egui window]
     P2 --> P3[Phase 3<br/>Shared state<br/>+ tray icon]
     P3 --> P4[Phase 4<br/>Makefile + RPM]
+    P4 --> P5[Phase 5<br/>Daemon split<br/>+ state sync]
 ```
 
 The phase order reflects a hard constraint rather than preference: the core is

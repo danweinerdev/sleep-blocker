@@ -111,6 +111,22 @@ differ, which is the single most error-prone aspect of this feature (see
 - **FR-14**: The utility SHALL install a desktop entry and themed icons such
   that it is launchable from a desktop application menu.
 - **FR-15**: The utility SHALL be installable as a binary RPM package.
+- **FR-16**: The inhibitors and the tray icon SHALL be owned by a background
+  process (the daemon) rather than by the window, so that closing the window
+  releases nothing.
+- **FR-17**: The window SHALL be a client of the daemon, holding no inhibitors
+  itself, and SHALL start a daemon if none is running so it can be launched
+  directly from a menu.
+- **FR-18**: At most one daemon SHALL run per session, and at most one window.
+  A second instance of either SHALL exit rather than compete.
+- **FR-19**: Closing the window with hide-on-close enabled SHALL leave the
+  daemon running; the tray SHALL offer to open a new window.
+- **FR-20**: The window SHALL close when its daemon exits, whether that exit was
+  requested or a crash — every control it offers is a request to that daemon.
+- **FR-21**: A change made through any surface SHALL become visible in the other
+  within approximately one second, without user interaction.
+- **FR-22**: Each build from a distinct source revision SHALL produce a package
+  that the package manager treats as an upgrade over the previous one.
 
 ### Non-Functional Requirements
 
@@ -130,6 +146,12 @@ differ, which is the single most error-prone aspect of this feature (see
   across a repaint, so the UI cannot stall on contention.
 - **NFR-07**: The packaging path SHALL gate on the test suite, lint, and format
   checks, so a regression in any of them fails the package rather than shipping.
+- **NFR-08**: The daemon's D-Bus interface SHALL announce every property change,
+  so a polling client observes changes made through another connection rather
+  than serving a stale cache.
+- **NFR-09**: The build SHALL be reproducible in a container, independent of
+  what is installed on the host, and SHALL be able to produce packages for both
+  x86_64 and aarch64.
 
 ## User Stories
 
@@ -180,6 +202,28 @@ change from assuming otherwise.
 - [x] **AC-11**: *(automated)* — `make package` produces an installable binary RPM,
   and fails if the test suite, `clippy -D warnings`, `cargo fmt --check`, or
   desktop-entry validation fails. Satisfies **FR-15**, **NFR-07**.
+- [x] **AC-24**: *(automated)* — The daemon exports its interface and every
+  property the window renders from is readable. Satisfies **FR-16**.
+- [x] **AC-25**: *(automated)* — A toggle through the daemon acquires a real
+  logind lock and releases it, with no window running. Satisfies **FR-16**.
+- [x] **AC-26**: *(automated)* — A second daemon on the same bus name exits
+  cleanly and explains why, rather than co-owning the locks and the tray.
+  Satisfies **FR-18**.
+- [x] **AC-27**: *(automated)* — A second window exits rather than opening a
+  duplicate, and a running window owns a bus name that is released when it
+  exits. Satisfies **FR-18**, and is what stops "Show window" stacking up
+  processes (**FR-19**).
+- [x] **AC-28**: *(automated)* — A long-lived reader observes a change made
+  through a *different* connection, for both the sleep lock and the screen-lock
+  preference. Driving both through one connection would refresh the cache as a
+  side effect and hide the failure. Satisfies **FR-21**, **NFR-08**.
+- [x] **AC-29**: *(automated)* — Quitting the daemon closes an open window.
+  Satisfies **FR-20**.
+- [x] **AC-30**: *(automated)* — Quitting releases every lock promptly and the
+  daemon process actually exits. Satisfies **FR-16**.
+- [x] **AC-31**: *(automated)* — A setter's return value agrees with what the
+  next reader sees, so the two surfaces cannot disagree about one setting.
+  Satisfies **FR-21**.
 - [x] **AC-14**: *(automated)* — The lock registered with `logind` is attributable
   to this application: the entry in `systemd-inhibit --list` carries a `WHO` of
   `sleep-block`. Asserted by the same test that filters the listing by owner.
@@ -237,6 +281,13 @@ noted against the criterion.
   *Refactor risk: adding a C-backed dependency would violate this silently.*
 - [x] **AC-22**: *(inspection)* — The release profile applies fat link-time
   optimisation and strips symbols. Satisfies **NFR-05**.
+- [x] **AC-32**: *(inspection)* — The window starts a daemon when none is
+  running, so it can be launched directly. Satisfies **FR-17**.
+- [x] **AC-33**: *(inspection)* — `make package` builds in a container and
+  produces packages for both architectures; the release field carries the commit
+  distance and hash so each build supersedes the last. Satisfies **FR-22**,
+  **NFR-09**. *Verified by running it and comparing with `rpm.vercmp`, but
+  nothing re-checks it.*
 - [x] **AC-23**: *(inspection)* — Reading state for rendering copies the values out
   under a short-lived lock and returns them by value, so no lock is held across
   a repaint. Satisfies **NFR-06**.
