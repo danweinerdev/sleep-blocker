@@ -3,12 +3,14 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod tray;
+mod window_policy;
 
 use eframe::egui;
 
 use sleep_block_core::SleepBlock;
 
 use crate::tray::SleepTray;
+use crate::window_policy::{Frame as PolicyFrame, WindowPolicy};
 
 /// Fixed window size. Tall enough for the tallest state — the one where an
 /// error line is showing under the checkbox — so no content is ever clipped.
@@ -96,10 +98,8 @@ struct App {
     tray: Option<ksni::blocking::Handle<SleepTray>>,
     /// Set when an action fails, so the user sees why nothing happened.
     error: Option<String>,
-    /// Previous frame's hidden flag, so a transition back to visible can be
-    /// detected. Comparing against the shared state is what lets the tray
-    /// trigger a show without reaching into the window directly.
-    window_was_hidden: bool,
+    /// Owns the hide/show decision, kept separate so it can be unit tested.
+    policy: WindowPolicy,
     /// Set by the in-window Quit button. Without it the close command that
     /// button sends would be caught by the hide-on-close handler and turned
     /// into another hide, making the button do nothing.
@@ -112,7 +112,7 @@ impl App {
             state,
             tray,
             error: None,
-            window_was_hidden: false,
+            policy: WindowPolicy::new(),
             quitting: false,
         }
     }
@@ -151,33 +151,31 @@ impl eframe::App for App {
     /// hide-to-tray work: no egui pass happens when the window is not shown, so
     /// anything here is the only code still running.
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let mut status = self.state.snapshot();
+        // The decision lives in `window_policy` so it can be tested headlessly;
+        // this only translates the outcome into viewport commands.
+        let action = self.policy.step(
+            &self.state,
+            PolicyFrame {
+                close_requested: ctx.input(|i| i.viewport().close_requested()),
+                quitting: self.quitting,
+            },
+        );
 
-        // Intercept the window manager's close request. Cancelling it and
-        // hiding the viewport keeps the process — and therefore the tray —
-        // alive. Without the cancel, eframe exits the moment the request
-        // arrives.
-        if ctx.input(|i| i.viewport().close_requested())
-            && status.keep_running_in_tray
-            && !self.quitting
-        {
+        if action.cancel_close {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
-            // Take the returned status rather than reusing the snapshot from
-            // the top of the frame: that one still says the window is visible,
-            // and the show-again check below would immediately undo the hide.
-            status = self.state.set_window_hidden(true);
-            self.refresh_tray();
         }
-
-        // The tray asks for the window back by clearing the hidden flag; this
-        // side does the actual showing. Focus matters because an un-hidden
-        // window can otherwise come back behind whatever the user is doing.
-        if !status.window_hidden && self.window_was_hidden {
+        if action.hide {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+        }
+        if action.show {
             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+            // Raise it too: an un-hidden window can otherwise return behind
+            // whatever the user is currently doing.
             ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
         }
-        self.window_was_hidden = status.window_hidden;
+        if action.refresh_tray {
+            self.refresh_tray();
+        }
 
         // While hidden there is no repaint loop to poll the shared state, so
         // request one: it is what notices a tray "Show window" click.
