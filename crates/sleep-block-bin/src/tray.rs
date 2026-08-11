@@ -126,7 +126,30 @@ impl Tray for SleepTray {
 
     fn menu(&self) -> Vec<MenuItem<Self>> {
         let status = self.state.snapshot();
-        vec![
+        let mut items: Vec<MenuItem<Self>> = Vec::new();
+
+        // Only offered when closing the window hides it: without that setting
+        // the window is always already on screen, so the item would do nothing.
+        // It sits at the top because a hidden window is the state in which the
+        // user most needs it.
+        if status.keep_running_in_tray {
+            items.push(
+                StandardItem {
+                    label: "Show window".into(),
+                    activate: Box::new(|this: &mut Self| {
+                        // Clearing the flag is the whole action; the window
+                        // polls this and does the un-hiding itself. The tray
+                        // has no handle on the viewport to do it directly.
+                        this.state.set_window_hidden(false);
+                    }),
+                    ..Default::default()
+                }
+                .into(),
+            );
+            items.push(MenuItem::Separator);
+        }
+
+        items.extend([
             StandardItem {
                 label: if status.sleep_blocked {
                     "Allow sleeping".into()
@@ -153,6 +176,16 @@ impl Tray for SleepTray {
                 ..Default::default()
             }
             .into(),
+            CheckmarkItem {
+                label: "Keep running in tray when closed".into(),
+                checked: status.keep_running_in_tray,
+                activate: Box::new(|this: &mut Self| {
+                    let wanted = !this.state.snapshot().keep_running_in_tray;
+                    this.state.set_keep_running_in_tray(wanted);
+                }),
+                ..Default::default()
+            }
+            .into(),
             MenuItem::Separator,
             StandardItem {
                 label: "Quit".into(),
@@ -166,7 +199,9 @@ impl Tray for SleepTray {
                 ..Default::default()
             }
             .into(),
-        ]
+        ]);
+
+        items
     }
 }
 

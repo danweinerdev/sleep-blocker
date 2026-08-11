@@ -24,6 +24,16 @@ pub struct Status {
     /// Whether the user wants the screen kept awake. Retained while sleep
     /// blocking is off so the preference survives a toggle cycle.
     pub keep_screen_awake: bool,
+    /// Whether closing the window should hide it and leave the application
+    /// running in the tray, rather than exiting.
+    ///
+    /// This is a window-behaviour preference rather than an inhibitor concern,
+    /// but it lives here because the tray thread reads it to decide whether to
+    /// offer a "Show window" item.
+    pub keep_running_in_tray: bool,
+    /// Whether the window is currently hidden. Set when a close request is
+    /// intercepted, cleared when the tray asks for the window back.
+    pub window_hidden: bool,
 }
 
 #[derive(Debug, Default)]
@@ -31,6 +41,8 @@ struct Inner {
     inhibitor: Option<Inhibitor>,
     screen: Option<ScreenInhibitor>,
     keep_screen_awake: bool,
+    keep_running_in_tray: bool,
+    window_hidden: bool,
 }
 
 /// Handle to the inhibitor state. Cloning yields another handle to the same
@@ -48,12 +60,7 @@ impl SleepBlock {
     /// Reads the current state. Takes the lock only for the duration of the
     /// copy, so it is safe to call from a render loop.
     pub fn snapshot(&self) -> Status {
-        let inner = self.lock();
-        Status {
-            sleep_blocked: inner.inhibitor.is_some(),
-            screen_blocked: inner.screen.is_some(),
-            keep_screen_awake: inner.keep_screen_awake,
-        }
+        Self::status_of(&self.lock())
     }
 
     /// Turns sleep blocking on if off, and off if on.
@@ -115,6 +122,27 @@ impl SleepBlock {
         Ok(Self::status_of(&inner))
     }
 
+    /// Sets whether closing the window should hide it rather than exit.
+    ///
+    /// Turning this off while the window is already hidden would strand the
+    /// application with no way back, so the hidden flag is cleared too — the
+    /// window is asked to reappear on the next frame.
+    pub fn set_keep_running_in_tray(&self, wanted: bool) -> Status {
+        let mut inner = self.lock();
+        inner.keep_running_in_tray = wanted;
+        if !wanted {
+            inner.window_hidden = false;
+        }
+        Self::status_of(&inner)
+    }
+
+    /// Records that the window has been hidden in response to a close request.
+    pub fn set_window_hidden(&self, hidden: bool) -> Status {
+        let mut inner = self.lock();
+        inner.window_hidden = hidden;
+        Self::status_of(&inner)
+    }
+
     /// Releases everything. Used on shutdown so the locks go away promptly
     /// rather than at process teardown.
     pub fn release_all(&self) {
@@ -128,6 +156,8 @@ impl SleepBlock {
             sleep_blocked: inner.inhibitor.is_some(),
             screen_blocked: inner.screen.is_some(),
             keep_screen_awake: inner.keep_screen_awake,
+            keep_running_in_tray: inner.keep_running_in_tray,
+            window_hidden: inner.window_hidden,
         }
     }
 

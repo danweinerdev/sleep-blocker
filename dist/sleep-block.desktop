@@ -13,3 +13,6 @@ Terminal=false
 Categories=Utility;
 Keywords=sleep;suspend;inhibit;caffeine;awake;insomnia;
 StartupNotify=true
+# Must match the app_id the window sets, so the desktop associates the running
+# window with this entry and shows its icon in the taskbar.
+StartupWMClass=sleep-block

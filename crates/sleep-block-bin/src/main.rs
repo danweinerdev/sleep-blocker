@@ -12,7 +12,7 @@ use crate::tray::SleepTray;
 
 /// Fixed window size. Tall enough for the tallest state — the one where an
 /// error line is showing under the checkbox — so no content is ever clipped.
-const WINDOW_SIZE: [f32; 2] = [280.0, 300.0];
+const WINDOW_SIZE: [f32; 2] = [300.0, 330.0];
 
 /// Colors chosen to stay legible against egui's dark background and to remain
 /// distinguishable for the most common forms of color blindness — the shapes
@@ -22,18 +22,56 @@ const GREEN_HOVER: egui::Color32 = egui::Color32::from_rgb(56, 190, 80);
 const RED: egui::Color32 = egui::Color32::from_rgb(180, 48, 48);
 const RED_HOVER: egui::Color32 = egui::Color32::from_rgb(210, 60, 60);
 
+/// Window icon, shown by the taskbar and window switcher. 256px so it stays
+/// sharp wherever the desktop scales it down.
+const WINDOW_ICON: &[u8] = include_bytes!("../../../dist/icons/sleep-block-active-256.png");
+
+/// Matches the desktop entry's basename. On Wayland this is how the compositor
+/// associates the window with its .desktop file, which is where the taskbar
+/// gets the icon from — without it the window shows a blank placeholder even
+/// when an icon is set directly.
+const APP_ID: &str = "sleep-block";
+
+/// Decodes the embedded window icon into eframe's straight-RGBA form.
+///
+/// Separate from the tray's decoder, which produces premultiplied ARGB for the
+/// StatusNotifierItem pixmap format. Returns `None` rather than panicking: a
+/// missing window icon is a cosmetic loss, not a reason to fail startup.
+fn window_icon() -> Option<egui::IconData> {
+    let decoder = png::Decoder::new(std::io::Cursor::new(WINDOW_ICON));
+    let mut reader = decoder.read_info().ok()?;
+    let mut buf = vec![0; reader.output_buffer_size()?];
+    let info = reader.next_frame(&mut buf).ok()?;
+    if info.color_type != png::ColorType::Rgba || info.bit_depth != png::BitDepth::Eight {
+        return None;
+    }
+    buf.truncate(info.buffer_size());
+    Some(egui::IconData {
+        rgba: buf,
+        width: info.width,
+        height: info.height,
+    })
+}
+
 fn main() -> eframe::Result {
     // The layout is a fixed stack of controls with nothing to reflow, so the
     // window is pinned rather than resizable. Min and max are both set: some
     // compositors still allow dragging an edge when only `resizable(false)` is
     // given, and clamping both bounds removes that.
+    let mut viewport = egui::ViewportBuilder::default()
+        .with_inner_size(WINDOW_SIZE)
+        .with_min_inner_size(WINDOW_SIZE)
+        .with_max_inner_size(WINDOW_SIZE)
+        .with_resizable(false)
+        .with_app_id(APP_ID)
+        .with_title("Sleep Block");
+
+    if let Some(icon) = window_icon() {
+        viewport = viewport.with_icon(icon);
+    }
+
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_inner_size(WINDOW_SIZE)
-            .with_min_inner_size(WINDOW_SIZE)
-            .with_max_inner_size(WINDOW_SIZE)
-            .with_resizable(false)
-            .with_title("Sleep Block"),
+        viewport,
         ..Default::default()
     };
 
@@ -58,6 +96,10 @@ struct App {
     tray: Option<ksni::blocking::Handle<SleepTray>>,
     /// Set when an action fails, so the user sees why nothing happened.
     error: Option<String>,
+    /// Previous frame's hidden flag, so a transition back to visible can be
+    /// detected. Comparing against the shared state is what lets the tray
+    /// trigger a show without reaching into the window directly.
+    window_was_hidden: bool,
 }
 
 impl App {
@@ -66,6 +108,7 @@ impl App {
             state,
             tray,
             error: None,
+            window_was_hidden: false,
         }
     }
 
@@ -83,6 +126,11 @@ impl App {
         self.refresh_tray();
     }
 
+    fn set_keep_running_in_tray(&mut self, wanted: bool) {
+        self.state.set_keep_running_in_tray(wanted);
+        self.refresh_tray();
+    }
+
     /// Tells the tray to re-read the shared state. Without this the icon would
     /// keep its previous appearance until something else prompted a redraw,
     /// since ksni has no way to observe the state changing underneath it.
@@ -94,6 +142,37 @@ impl App {
 }
 
 impl eframe::App for App {
+    /// Runs every frame *and* while the window is hidden, which is what makes
+    /// hide-to-tray work: no egui pass happens when the window is not shown, so
+    /// anything here is the only code still running.
+    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        let status = self.state.snapshot();
+
+        // Intercept the window manager's close request. Cancelling it and
+        // hiding the viewport keeps the process — and therefore the tray —
+        // alive. Without the cancel, eframe exits the moment the request
+        // arrives.
+        if ctx.input(|i| i.viewport().close_requested()) && status.keep_running_in_tray {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+            self.state.set_window_hidden(true);
+            self.refresh_tray();
+        }
+
+        // The tray asks for the window back by clearing the hidden flag; this
+        // side does the actual showing. Focus matters because an un-hidden
+        // window can otherwise come back behind whatever the user is doing.
+        if !status.window_hidden && self.window_was_hidden {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+            ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+        }
+        self.window_was_hidden = status.window_hidden;
+
+        // While hidden there is no repaint loop to poll the shared state, so
+        // request one: it is what notices a tray "Show window" click.
+        ctx.request_repaint_after(std::time::Duration::from_millis(250));
+    }
+
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         // The tray can toggle the state from its own thread, and egui has no
         // way to learn about that. Polling once a second keeps the window from
@@ -150,6 +229,28 @@ impl eframe::App for App {
                     // the previous attempt's error.
                     self.error = None;
                     self.set_keep_screen_awake(keep_screen_awake);
+                }
+
+                ui.add_space(4.0);
+                // Without a tray there would be no way to bring the window
+                // back, so the option is unavailable rather than a trap.
+                let has_tray = self.tray.is_some();
+                let mut keep_running = status.keep_running_in_tray;
+                let tray_toggled = ui
+                    .add_enabled(
+                        has_tray,
+                        egui::Checkbox::new(&mut keep_running, "Keep running in tray when closed"),
+                    )
+                    .on_hover_text(if has_tray {
+                        "Closing the window hides it instead of quitting.\n\
+                         Reopen it from the tray icon's menu."
+                    } else {
+                        "Unavailable: no system tray was found, so a hidden\n\
+                         window could not be reopened."
+                    })
+                    .changed();
+                if tray_toggled {
+                    self.set_keep_running_in_tray(keep_running);
                 }
 
                 if let Some(error) = &self.error {
