@@ -8,6 +8,10 @@ use sleep_block_core::{Inhibitor, ScreenInhibitor};
 
 const REASON: &str = "User requested the system stay awake";
 
+/// Fixed window size. Tall enough for the tallest state — the one where an
+/// error line is showing under the checkbox — so no content is ever clipped.
+const WINDOW_SIZE: [f32; 2] = [280.0, 300.0];
+
 /// Colors chosen to stay legible against egui's dark background and to remain
 /// distinguishable for the most common forms of color blindness — the shapes
 /// and the label carry the state too, so color is never the only signal.
@@ -17,11 +21,16 @@ const RED: egui::Color32 = egui::Color32::from_rgb(180, 48, 48);
 const RED_HOVER: egui::Color32 = egui::Color32::from_rgb(210, 60, 60);
 
 fn main() -> eframe::Result {
+    // The layout is a fixed stack of controls with nothing to reflow, so the
+    // window is pinned rather than resizable. Min and max are both set: some
+    // compositors still allow dragging an edge when only `resizable(false)` is
+    // given, and clamping both bounds removes that.
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([280.0, 260.0])
-            .with_min_inner_size([240.0, 240.0])
-            .with_resizable(true)
+            .with_inner_size(WINDOW_SIZE)
+            .with_min_inner_size(WINDOW_SIZE)
+            .with_max_inner_size(WINDOW_SIZE)
+            .with_resizable(false)
             .with_title("Sleep Block"),
         ..Default::default()
     };
@@ -104,7 +113,12 @@ impl App {
 
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        // The frame must be told to fill the window. Left to itself it wraps
+        // only its contents, leaving the remainder of the viewport unpainted —
+        // which shows up as a black bar below the last control.
+        ui.set_min_size(ui.available_size());
         egui::Frame::central_panel(ui.style()).show(ui, |ui| {
+            ui.set_min_size(ui.available_size());
             ui.vertical_centered(|ui| {
                 ui.add_space(16.0);
 
