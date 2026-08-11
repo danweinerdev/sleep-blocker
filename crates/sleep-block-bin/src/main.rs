@@ -110,24 +110,33 @@ impl App {
         }
     }
 
-    fn toggle(&mut self) {
+    /// Any action that changes daemon state also requests a repaint.
+    ///
+    /// egui only redraws on demand, and a control drawn earlier in the same
+    /// frame has already rendered the pre-change value — so without this the
+    /// indicator kept showing the old colour until an unrelated event
+    /// happened to repaint the window.
+    fn toggle(&mut self, ctx: &egui::Context) {
         self.error = self.client.toggle().err().map(|e| e.to_string());
+        ctx.request_repaint();
     }
 
-    fn set_keep_screen_awake(&mut self, wanted: bool) {
+    fn set_keep_screen_awake(&mut self, wanted: bool, ctx: &egui::Context) {
         self.error = self
             .client
             .set_keep_screen_awake(wanted)
             .err()
             .map(|e| format!("Screen lock not blocked: {e}"));
+        ctx.request_repaint();
     }
 
-    fn set_keep_running_in_tray(&mut self, wanted: bool) {
+    fn set_keep_running_in_tray(&mut self, wanted: bool, ctx: &egui::Context) {
         self.error = self
             .client
             .set_keep_running_in_tray(wanted)
             .err()
             .map(|e| e.to_string());
+        ctx.request_repaint();
     }
 }
 
@@ -174,7 +183,7 @@ impl eframe::App for App {
                 // Read once per frame. The tray may have changed this state on
                 // another thread, so the window renders from the shared value
                 // rather than any local copy.
-                let status = self.client.snapshot();
+                let mut status = self.client.snapshot();
 
                 ui.heading(if status.sleep_blocked {
                     "Awake"
@@ -184,7 +193,12 @@ impl eframe::App for App {
                 ui.add_space(12.0);
 
                 if self.indicator(ui, status.sleep_blocked).clicked() {
-                    self.toggle();
+                    self.toggle(ui.ctx());
+                    // Re-read rather than reuse the snapshot taken above: that
+                    // one predates the toggle, and every control below would
+                    // otherwise render the previous state until some unrelated
+                    // event happened to repaint the window.
+                    status = self.client.cached();
                 }
 
                 ui.add_space(12.0);
@@ -210,7 +224,7 @@ impl eframe::App for App {
                     // Clear a stale failure so the retry isn't shown alongside
                     // the previous attempt's error.
                     self.error = None;
-                    self.set_keep_screen_awake(keep_screen_awake);
+                    self.set_keep_screen_awake(keep_screen_awake, ui.ctx());
                 }
 
                 ui.add_space(4.0);
@@ -232,7 +246,7 @@ impl eframe::App for App {
                     })
                     .changed();
                 if tray_toggled {
-                    self.set_keep_running_in_tray(keep_running);
+                    self.set_keep_running_in_tray(keep_running, ui.ctx());
                 }
 
                 // With hide-on-close enabled, the window's close button no

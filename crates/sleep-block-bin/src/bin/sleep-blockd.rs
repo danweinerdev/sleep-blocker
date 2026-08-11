@@ -34,26 +34,37 @@ struct Service {
 
 #[zbus::interface(name = "net.phantomnet.SleepBlock1")]
 impl Service {
-    fn toggle(&self) -> (bool, bool) {
-        match self.state.toggle() {
-            Ok(s) => (s.sleep_blocked, s.screen_blocked),
-            Err(e) => {
-                eprintln!("toggle failed: {e}");
-                let s = self.state.snapshot();
-                (s.sleep_blocked, s.screen_blocked)
-            }
+    /// Toggling changes several properties at once, so each is announced.
+    ///
+    /// zbus proxies cache properties and refresh only on PropertiesChanged; a
+    /// server that never emits it leaves every client stuck on the value it
+    /// read first. That is not a nicety — without these emissions the GUI's
+    /// indicator never changes.
+    async fn toggle(
+        &self,
+        #[zbus(signal_emitter)] emitter: zbus::object_server::SignalEmitter<'_>,
+    ) -> (bool, bool) {
+        let result = self.state.toggle();
+        if let Err(e) = &result {
+            eprintln!("toggle failed: {e}");
         }
+        let s = result.unwrap_or_else(|_| self.state.snapshot());
+        self.announce(&emitter).await;
+        (s.sleep_blocked, s.screen_blocked)
     }
 
-    fn set_keep_screen_awake(&self, wanted: bool) -> (bool, bool) {
-        match self.state.set_keep_screen_awake(wanted) {
-            Ok(s) => (s.sleep_blocked, s.screen_blocked),
-            Err(e) => {
-                eprintln!("screen lock change failed: {e}");
-                let s = self.state.snapshot();
-                (s.sleep_blocked, s.screen_blocked)
-            }
+    async fn set_keep_screen_awake(
+        &self,
+        wanted: bool,
+        #[zbus(signal_emitter)] emitter: zbus::object_server::SignalEmitter<'_>,
+    ) -> (bool, bool) {
+        let result = self.state.set_keep_screen_awake(wanted);
+        if let Err(e) = &result {
+            eprintln!("screen lock change failed: {e}");
         }
+        let s = result.unwrap_or_else(|_| self.state.snapshot());
+        self.announce(&emitter).await;
+        (s.sleep_blocked, s.screen_blocked)
     }
 
     fn quit(&self) {
@@ -90,6 +101,7 @@ impl Service {
 
     #[zbus(property)]
     fn set_keep_running_in_tray(&self, wanted: bool) {
+        // A property setter's own change signal is emitted by zbus.
         self.state.set_keep_running_in_tray(wanted);
     }
 
@@ -97,6 +109,17 @@ impl Service {
     async fn show_window_requested(
         emitter: &zbus::object_server::SignalEmitter<'_>,
     ) -> zbus::Result<()>;
+}
+
+impl Service {
+    /// Emits PropertiesChanged for everything a mutation can move. Emitting a
+    /// few unchanged values is cheaper than reasoning about which ones moved.
+    async fn announce(&self, emitter: &zbus::object_server::SignalEmitter<'_>) {
+        let _ = self.sleep_blocked_changed(emitter).await;
+        let _ = self.screen_blocked_changed(emitter).await;
+        let _ = self.keep_screen_awake_changed(emitter).await;
+        let _ = self.keep_running_in_tray_changed(emitter).await;
+    }
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
