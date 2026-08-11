@@ -146,42 +146,48 @@ impl App {
     }
 }
 
+/// Builds the visible window's viewport description.
+///
+/// Used for the deferred child viewport that carries the actual UI. Hiding is
+/// implemented by *not* showing this viewport on a frame, which destroys the
+/// window — the only way to hide on Wayland, where `set_visible` is a no-op.
+fn window_viewport() -> egui::ViewportBuilder {
+    let mut viewport = egui::ViewportBuilder::default()
+        .with_inner_size(WINDOW_SIZE)
+        .with_min_inner_size(WINDOW_SIZE)
+        .with_max_inner_size(WINDOW_SIZE)
+        .with_resizable(false)
+        .with_app_id(APP_ID)
+        .with_title("Sleep Block");
+    if let Some(icon) = window_icon() {
+        viewport = viewport.with_icon(icon);
+    }
+    viewport
+}
+
 impl eframe::App for App {
-    /// Runs every frame *and* while the window is hidden, which is what makes
-    /// hide-to-tray work: no egui pass happens when the window is not shown, so
-    /// anything here is the only code still running.
+    /// Runs every frame, including while the window is destroyed — which is
+    /// what keeps the process (and therefore the tray) alive with no window.
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // The decision lives in `window_policy` so it can be tested headlessly;
-        // this only translates the outcome into viewport commands.
-        let action = self.policy.step(
-            &self.state,
-            PolicyFrame {
-                close_requested: ctx.input(|i| i.viewport().close_requested()),
-                quitting: self.quitting,
-            },
-        );
-
-        if action.cancel_close {
-            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-        }
-        if action.hide {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
-        }
-        if action.show {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
-            // Raise it too: an un-hidden window can otherwise return behind
-            // whatever the user is currently doing.
-            ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
-        }
-        if action.refresh_tray {
-            self.refresh_tray();
+        // A close arriving on the ROOT viewport means the whole app should go:
+        // the root has no window of its own that the user could have closed,
+        // so this is a genuine shutdown request.
+        if ctx.input(|i| i.viewport().close_requested()) {
+            self.state.release_all();
         }
 
-        // While hidden there is no repaint loop to poll the shared state, so
-        // request one: it is what notices a tray "Show window" click.
+        // While the window is destroyed nothing else drives repaints, so poll:
+        // this is what notices a tray "Show window" click.
         ctx.request_repaint_after(std::time::Duration::from_millis(250));
     }
 
+    /// The root viewport draws nothing: the real window is a child viewport so
+    /// that it can be destroyed and recreated, which is the only way to hide a
+    /// window on Wayland (`set_visible` is a documented no-op there).
+    ///
+    /// Not showing the child on a frame destroys its window; showing it again
+    /// recreates one. That is what GTK's and Qt's `hide()` do underneath, so
+    /// this is the conventional mechanism rather than a workaround.
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         // The tray can toggle the state from its own thread, and egui has no
         // way to learn about that. Polling once a second keeps the window from
@@ -189,6 +195,64 @@ impl eframe::App for App {
         ui.ctx()
             .request_repaint_after(std::time::Duration::from_secs(1));
 
+        if self.state.snapshot().window_hidden {
+            return;
+        }
+
+        // `immediate` rather than `deferred`: the callback may borrow `self`,
+        // which a deferred viewport's `Send + Sync + 'static` bound forbids.
+        // The cost is that the root repaints with the child, which is nothing
+        // for a window that redraws about once a second.
+        let mut close_requested = false;
+        egui::Context::show_viewport_immediate(
+            ui.ctx(),
+            egui::ViewportId::from_hash_of("sleep-block-window"),
+            window_viewport(),
+            |ui, _class| {
+                if ui.ctx().input(|i| i.viewport().close_requested()) {
+                    close_requested = true;
+                }
+                self.window_contents(ui);
+            },
+        );
+
+        // Handled out here so the borrow of `self` inside the closure ends
+        // first. A close with hide-on-close off falls through to the root
+        // viewport's own close handling, which exits.
+        if close_requested {
+            self.on_window_close_requested(ui.ctx());
+        }
+    }
+}
+
+impl App {
+    /// Decides what a close of the *window* means. Hide-on-close applies here,
+    /// not to the root viewport: this is the window the user actually clicked
+    /// the X on.
+    fn on_window_close_requested(&mut self, ctx: &egui::Context) {
+        let action = self.policy.step(
+            &self.state,
+            PolicyFrame {
+                close_requested: true,
+                quitting: self.quitting,
+            },
+        );
+
+        if action.refresh_tray {
+            self.refresh_tray();
+        }
+
+        // Nothing intercepted it, so the user wants out. Releasing here rather
+        // than relying on process teardown makes the locks disappear promptly.
+        if !action.cancel_close {
+            self.state.release_all();
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        }
+    }
+
+    /// Draws the window's actual contents. Called from inside the child
+    /// viewport, so `ui` here is the child's, not the root's.
+    fn window_contents(&mut self, ui: &mut egui::Ui) {
         // The frame must be told to fill the window. Left to itself it wraps
         // only its contents, leaving the remainder of the viewport unpainted —
         // which shows up as a black bar below the last control.
@@ -286,9 +350,6 @@ impl eframe::App for App {
             });
         });
     }
-}
-
-impl App {
     /// Draws the circular status light and returns its click response. The
     /// circle is the button — there is no separate control to keep in sync.
     fn indicator(&self, ui: &mut egui::Ui, active: bool) -> egui::Response {
