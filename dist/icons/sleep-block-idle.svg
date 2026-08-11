@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Idle state: sleep is allowed. Same silhouette and stroke weight as the
+       active icon so the app stays recognisable; the states differ by colour
+       and saturation instead.
+
+       The stroke is kept at full weight and opacity deliberately: a thinner,
+       translucent version disappeared against dark panels at 22px. The mid
+       slate tones below hold contrast against both light and dark trays,
+       which matters because the panel theme is not knowable here. -->
+  <defs>
+    <linearGradient id="idle" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#94a3b8"/>
+      <stop offset="1" stop-color="#cbd5e1"/>
+    </linearGradient>
+  </defs>
+  <path
+    d="M 256 256
+       C 216 168, 160 144, 120 144
+       C 68 144, 32 190, 32 256
+       C 32 322, 68 368, 120 368
+       C 160 368, 216 344, 256 256
+       C 296 168, 352 144, 392 144
+       C 444 144, 480 190, 480 256
+       C 480 322, 444 368, 392 368
+       C 352 368, 296 344, 256 256
+       Z"
+    fill="none"
+    stroke="url(#idle)"
+    stroke-width="62"
+    stroke-linecap="round"
+    stroke-linejoin="round"/>
+</svg>
