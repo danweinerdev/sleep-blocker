@@ -59,6 +59,32 @@ The release profile enables fat LTO and strips symbols, which takes the binary
 from roughly 15 MB to 9.4 MB. Most of what remains is the statically linked GPU
 and font stack.
 
+## Packaging
+
+```sh
+make package
+```
+
+Builds the release binary, runs the checks, and produces a binary RPM in
+`~/rpmbuild/RPMS/`. The compile happens in the Makefile using whatever
+toolchain is on `PATH`, and `rpmbuild` only stages the finished artefacts —
+so a rustup toolchain works, which a source RPM's `BuildRequires: rust` would
+reject.
+
+`make package` runs `make check` first, which is tests plus `clippy -D
+warnings`, `cargo fmt --check`, and desktop-file validation. A lint regression
+fails the package rather than shipping.
+
+To install without RPM:
+
+```sh
+sudo make install            # to /usr
+make install DESTDIR=/tmp/x  # staged, for inspection
+```
+
+Both install the binary, the desktop entry, and the icons into the hicolor
+theme so launchers resolve `Icon=sleep-block`.
+
 ## Layout
 
 - `crates/sleep-block-core` — the inhibitor logic, with no GUI dependency. Can

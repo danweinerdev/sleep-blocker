@@ -98,7 +98,10 @@ impl Tray for SleepTray {
         } else {
             IDLE_PNGS
         };
-        source.iter().filter_map(|bytes| decode_png(bytes)).collect()
+        source
+            .iter()
+            .filter_map(|bytes| decode_png(bytes))
+            .collect()
     }
 
     fn tool_tip(&self) -> ksni::ToolTip {

@@ -166,10 +166,8 @@ impl App {
     /// circle is the button — there is no separate control to keep in sync.
     fn indicator(&self, ui: &mut egui::Ui, active: bool) -> egui::Response {
         let diameter = 88.0;
-        let (rect, response) = ui.allocate_exact_size(
-            egui::vec2(diameter, diameter),
-            egui::Sense::click(),
-        );
+        let (rect, response) =
+            ui.allocate_exact_size(egui::vec2(diameter, diameter), egui::Sense::click());
 
         let hovered = response.hovered();
         if hovered {
@@ -210,11 +208,7 @@ impl App {
         if active {
             painter.circle_filled(center, radius * 0.28, glyph_color);
         } else {
-            painter.circle_stroke(
-                center,
-                radius * 0.28,
-                egui::Stroke::new(3.0, glyph_color),
-            );
+            painter.circle_stroke(center, radius * 0.28, egui::Stroke::new(3.0, glyph_color));
         }
 
         response.on_hover_text(if active {
