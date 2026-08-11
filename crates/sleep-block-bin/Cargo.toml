@@ -4,9 +4,17 @@ description = "GUI toggle for blocking system sleep"
 version.workspace = true
 edition.workspace = true
 
+[lib]
+name = "sleep_block_app"
+path = "src/lib.rs"
+
 [[bin]]
 name = "sleep-block"
 path = "src/main.rs"
+
+[[bin]]
+name = "sleep-blockd"
+path = "src/bin/sleep-blockd.rs"
 
 [dependencies]
 sleep-block-core = { path = "../sleep-block-core" }
@@ -18,3 +26,5 @@ eframe = { version = "0.36.1", default-features = false, features = [
 ] }
 ksni = { version = "0.3.6", default-features = false, features = ["blocking", "async-io"] }
 png = "0.18.1"
+zbus = "5.19.0"
+event-listener = "5"

@@ -46,7 +46,6 @@ fn starts_with_nothing_held() {
     assert!(!status.screen_blocked);
     assert!(!status.keep_screen_awake);
     assert!(!status.keep_running_in_tray);
-    assert!(!status.window_hidden);
 }
 
 #[test]
@@ -188,18 +187,4 @@ fn tray_preferences_are_independent_of_the_locks() {
         !status.sleep_blocked,
         "a window preference must not acquire an inhibitor"
     );
-}
-
-/// Turning hide-on-close off while the window is hidden would otherwise leave
-/// the application with no window and no way to open one.
-#[test]
-fn disabling_keep_running_in_tray_unhides_the_window() {
-    let state = SleepBlock::new();
-    state.set_keep_running_in_tray(true);
-    state.set_window_hidden(true);
-
-    let status = state.set_keep_running_in_tray(false);
-
-    assert!(!status.keep_running_in_tray);
-    assert!(!status.window_hidden, "the window must not be stranded");
 }

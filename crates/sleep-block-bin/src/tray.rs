@@ -136,11 +136,11 @@ impl Tray for SleepTray {
             items.push(
                 StandardItem {
                     label: "Show window".into(),
-                    activate: Box::new(|this: &mut Self| {
-                        // Clearing the flag is the whole action; the window
-                        // polls this and does the un-hiding itself. The tray
-                        // has no handle on the viewport to do it directly.
-                        this.state.set_window_hidden(false);
+                    activate: Box::new(|_this: &mut Self| {
+                        // Launching a fresh GUI *is* showing the window. A
+                        // running GUI cannot un-hide itself on Wayland, so the
+                        // daemon starts a new one instead.
+                        crate::spawn_gui();
                     }),
                     ..Default::default()
                 }

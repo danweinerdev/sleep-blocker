@@ -128,6 +128,7 @@ icons:
 
 install: build
 	install -Dpm0755 $(BIN) $(BINDIR)/$(NAME)
+	install -Dpm0755 target/release/$(NAME)d $(BINDIR)/$(NAME)d
 	install -Dpm0644 dist/$(NAME).desktop $(APPDIR)/$(NAME).desktop
 	@for size in $(ICON_SIZES); do \
 	    install -Dpm0644 dist/icons/$(NAME)-active-$${size}.png \
@@ -146,6 +147,7 @@ install: build
 
 uninstall:
 	rm -f $(BINDIR)/$(NAME)
+	rm -f $(BINDIR)/$(NAME)d
 	rm -f $(APPDIR)/$(NAME).desktop
 	@for size in $(ICON_SIZES); do \
 	    rm -f $(ICONDIR)/$${size}x$${size}/apps/$(NAME).png; \
@@ -216,6 +218,8 @@ package-arch:
 	@# A native build lands in target/release; a cross build in target/<triple>/release.
 	install -pm0755 $(if $(filter 1,$(NATIVE)),target/release/$(NAME),target/$(TRIPLE)/release/$(NAME)) \
 	                                        $(STAGE)/$(NAME)
+	install -pm0755 $(if $(filter 1,$(NATIVE)),target/release/$(NAME)d,target/$(TRIPLE)/release/$(NAME)d) \
+	                                        $(STAGE)/$(NAME)d
 	install -pm0644 dist/$(NAME).desktop    $(STAGE)/$(NAME).desktop
 	install -pm0644 dist/icons/*.png        $(STAGE)/icons/
 	install -pm0644 dist/icons/*.svg        $(STAGE)/icons/

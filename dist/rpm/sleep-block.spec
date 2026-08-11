@@ -68,6 +68,9 @@ window.
 
 %install
 install -Dpm0755 %{name} %{buildroot}%{_bindir}/%{name}
+# The daemon owns the inhibitors and the tray; the GUI is a disposable client
+# that talks to it over D-Bus. Both are needed.
+install -Dpm0755 %{name}d %{buildroot}%{_bindir}/%{name}d
 
 desktop-file-install \
     --dir=%{buildroot}%{_datadir}/applications \
@@ -127,6 +130,7 @@ gtk-update-icon-cache -qf %{_datadir}/icons/hicolor &>/dev/null || :
 %license LICENSE
 %doc README.md
 %{_bindir}/%{name}
+%{_bindir}/%{name}d
 %{_datadir}/applications/%{name}.desktop
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
 %{_datadir}/icons/hicolor/scalable/apps/%{name}.svg

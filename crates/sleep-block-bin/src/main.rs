@@ -2,15 +2,9 @@
 // Linux-only in practice since it talks to systemd-logind.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod tray;
-mod window_policy;
-
 use eframe::egui;
 
-use sleep_block_core::SleepBlock;
-
-use crate::tray::SleepTray;
-use crate::window_policy::{Frame as PolicyFrame, WindowPolicy};
+use sleep_block_app::client::DaemonClient;
 
 /// Fixed window size. Tall enough for the tallest state — the one where an
 /// error line is showing under the checkbox — so no content is ever clipped.
@@ -77,29 +71,30 @@ fn main() -> eframe::Result {
         ..Default::default()
     };
 
-    // One shared state, two surfaces. The tray owns a clone of the handle, not
-    // a copy of the locks, so a toggle from either side is seen by both.
-    let state = SleepBlock::new();
-    let tray = SleepTray::start(state.clone());
+    // The daemon owns the locks and the tray; this process only renders. If no
+    // daemon is running one is started, so the GUI can be launched directly
+    // without the user needing to know a daemon exists.
+    let client = match DaemonClient::connect() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("cannot reach the sleep-block daemon: {e}");
+            return Ok(());
+        }
+    };
 
     eframe::run_native(
         "sleep-block",
         options,
-        Box::new(move |_cc| Ok(Box::new(App::new(state, tray)))),
+        Box::new(move |_cc| Ok(Box::new(App::new(client)))),
     )
 }
 
 struct App {
     /// Shared with the tray. The locks live here, not in the GUI, so both
     /// surfaces read and write the same state.
-    state: SleepBlock,
-    /// Kept alive for as long as the app runs: dropping the handle would stop
-    /// the tray service. `None` when no StatusNotifierItem host was found.
-    tray: Option<ksni::blocking::Handle<SleepTray>>,
+    client: DaemonClient,
     /// Set when an action fails, so the user sees why nothing happened.
     error: Option<String>,
-    /// Owns the hide/show decision, kept separate so it can be unit tested.
-    policy: WindowPolicy,
     /// Set by the in-window Quit button. Without it the close command that
     /// button sends would be caught by the hide-on-close handler and turned
     /// into another hide, making the button do nothing.
@@ -107,42 +102,32 @@ struct App {
 }
 
 impl App {
-    fn new(state: SleepBlock, tray: Option<ksni::blocking::Handle<SleepTray>>) -> Self {
+    fn new(client: DaemonClient) -> Self {
         Self {
-            state,
-            tray,
+            client,
             error: None,
-            policy: WindowPolicy::new(),
             quitting: false,
         }
     }
 
     fn toggle(&mut self) {
-        self.error = self.state.toggle().err().map(|e| e.to_string());
-        self.refresh_tray();
+        self.error = self.client.toggle().err().map(|e| e.to_string());
     }
 
     fn set_keep_screen_awake(&mut self, wanted: bool) {
         self.error = self
-            .state
+            .client
             .set_keep_screen_awake(wanted)
             .err()
             .map(|e| format!("Screen lock not blocked: {e}"));
-        self.refresh_tray();
     }
 
     fn set_keep_running_in_tray(&mut self, wanted: bool) {
-        self.state.set_keep_running_in_tray(wanted);
-        self.refresh_tray();
-    }
-
-    /// Tells the tray to re-read the shared state. Without this the icon would
-    /// keep its previous appearance until something else prompted a redraw,
-    /// since ksni has no way to observe the state changing underneath it.
-    fn refresh_tray(&self) {
-        if let Some(tray) = &self.tray {
-            tray.update(|_| {});
-        }
+        self.error = self
+            .client
+            .set_keep_running_in_tray(wanted)
+            .err()
+            .map(|e| e.to_string());
     }
 }
 
@@ -151,35 +136,23 @@ impl eframe::App for App {
     /// hide-to-tray work: no egui pass happens when the window is not shown, so
     /// anything here is the only code still running.
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // The decision lives in `window_policy` so it can be tested headlessly;
-        // this only translates the outcome into viewport commands.
-        let action = self.policy.step(
-            &self.state,
-            PolicyFrame {
-                close_requested: ctx.input(|i| i.viewport().close_requested()),
-                quitting: self.quitting,
-            },
-        );
-
-        if action.cancel_close {
-            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-        }
-        if action.hide {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
-        }
-        if action.show {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
-            // Raise it too: an un-hidden window can otherwise return behind
-            // whatever the user is currently doing.
-            ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
-        }
-        if action.refresh_tray {
-            self.refresh_tray();
+        // The daemon owns every lock, so closing this window releases nothing.
+        // With hide-on-close enabled the window simply goes away and the daemon
+        // keeps running; the tray's "Show window" starts a fresh GUI. That is
+        // what makes this work on Wayland, where a window cannot hide itself.
+        //
+        // With the setting off, a close should stop the whole application, so
+        // the daemon is told to quit as well.
+        if ctx.input(|i| i.viewport().close_requested())
+            && !self.quitting
+            && !self.client.cached().keep_running_in_tray
+        {
+            self.client.quit_daemon();
         }
 
-        // While hidden there is no repaint loop to poll the shared state, so
-        // request one: it is what notices a tray "Show window" click.
-        ctx.request_repaint_after(std::time::Duration::from_millis(250));
+        // The tray can change state behind our back; poll so the window does
+        // not show a stale reading.
+        ctx.request_repaint_after(std::time::Duration::from_millis(500));
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
@@ -201,7 +174,7 @@ impl eframe::App for App {
                 // Read once per frame. The tray may have changed this state on
                 // another thread, so the window renders from the shared value
                 // rather than any local copy.
-                let status = self.state.snapshot();
+                let status = self.client.snapshot();
 
                 ui.heading(if status.sleep_blocked {
                     "Awake"
@@ -243,7 +216,7 @@ impl eframe::App for App {
                 ui.add_space(4.0);
                 // Without a tray there would be no way to bring the window
                 // back, so the option is unavailable rather than a trap.
-                let has_tray = self.tray.is_some();
+                let has_tray = self.client.has_tray();
                 let mut keep_running = status.keep_running_in_tray;
                 let tray_toggled = ui
                     .add_enabled(
@@ -274,7 +247,7 @@ impl eframe::App for App {
                         .clicked()
                     {
                         self.quitting = true;
-                        self.state.release_all();
+                        self.client.quit_daemon();
                         ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                 }

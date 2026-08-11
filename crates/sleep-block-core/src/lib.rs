@@ -18,6 +18,7 @@
 //! [`ScreenInhibitor`] therefore carries a `Drop` impl; [`Inhibitor`] needs none.
 
 mod inhibit;
+pub mod ipc;
 mod state;
 
 pub use inhibit::{Error, Inhibitor, ScreenInhibitor};
