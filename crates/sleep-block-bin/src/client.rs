@@ -45,6 +45,8 @@ pub struct DaemonClient {
     /// Cached so a failed call can keep rendering the last known-good values
     /// rather than flickering to defaults.
     last: Status,
+    /// Set once the daemon stops answering.
+    daemon_gone: bool,
 }
 
 impl DaemonClient {
@@ -62,7 +64,10 @@ impl DaemonClient {
         // Claiming this is what stops "Show window" stacking up windows: the
         // daemon checks the name first, and a GUI that loses the race exits.
         use zbus::fdo::{RequestNameFlags, RequestNameReply};
-        match connection.request_name_with_flags(GUI_BUS_NAME, RequestNameFlags::DoNotQueue.into())
+        let gui_name =
+            std::env::var("SLEEP_BLOCK_GUI_BUS_NAME").unwrap_or_else(|_| GUI_BUS_NAME.to_string());
+        match connection
+            .request_name_with_flags(gui_name.as_str(), RequestNameFlags::DoNotQueue.into())
         {
             Ok(RequestNameReply::PrimaryOwner) => {}
             Ok(_) | Err(zbus::Error::NameTaken) => return Err(ConnectError::AlreadyRunning),
@@ -90,13 +95,14 @@ impl DaemonClient {
             }
         };
 
-        let last = read_status(&proxy);
+        let last = read_status(&proxy).ok_or(ConnectError::DaemonUnavailable)?;
         let has_tray = proxy.has_tray().unwrap_or(false);
         Ok(Self {
             proxy,
             _connection: connection,
             has_tray,
             last,
+            daemon_gone: false,
         })
     }
 
@@ -116,9 +122,27 @@ impl DaemonClient {
 
     /// Re-reads the daemon's state. Called once per frame; the calls are local
     /// IPC and complete in microseconds.
+    ///
+    /// Keeps the last known values if the daemon has gone, so the window does
+    /// not flash to a wrong state in the moment before it closes.
     pub fn snapshot(&mut self) -> Status {
-        self.last = read_status(&self.proxy);
+        match read_status(&self.proxy) {
+            Some(status) => {
+                self.last = status;
+                self.daemon_gone = false;
+            }
+            None => self.daemon_gone = true,
+        }
         self.last
+    }
+
+    /// Whether the daemon has stopped answering.
+    ///
+    /// The GUI is useless without it — every control is a request to a process
+    /// that is no longer there — so the window closes rather than sitting
+    /// inert. This also covers a daemon crash, not just an orderly Quit.
+    pub fn daemon_gone(&self) -> bool {
+        self.daemon_gone
     }
 
     /// Whether the daemon has a tray icon.
@@ -163,16 +187,26 @@ impl DaemonClient {
 fn uncached_proxy(
     connection: &zbus::blocking::Connection,
 ) -> zbus::Result<SleepBlockServiceProxyBlocking<'static>> {
+    // Honours the same override the daemon uses, so a test can point both
+    // halves at a private bus name instead of the user's real daemon.
+    let name = std::env::var("SLEEP_BLOCK_BUS_NAME")
+        .unwrap_or_else(|_| sleep_block_core::ipc::BUS_NAME.to_string());
     SleepBlockServiceProxyBlocking::builder(connection)
+        .destination(name)?
         .cache_properties(zbus::proxy::CacheProperties::No)
         .build()
 }
 
-fn read_status(proxy: &SleepBlockServiceProxyBlocking<'static>) -> Status {
-    Status {
-        sleep_blocked: proxy.sleep_blocked().unwrap_or(false),
-        screen_blocked: proxy.screen_blocked().unwrap_or(false),
-        keep_screen_awake: proxy.keep_screen_awake().unwrap_or(false),
-        keep_running_in_tray: proxy.keep_running_in_tray().unwrap_or(false),
-    }
+/// Reads every property, or `None` if the daemon has gone.
+///
+/// The distinction matters: `unwrap_or(false)` would render a dead daemon as
+/// "nothing is blocked", which looks like a normal idle state rather than the
+/// application having lost its other half.
+fn read_status(proxy: &SleepBlockServiceProxyBlocking<'static>) -> Option<Status> {
+    Some(Status {
+        sleep_blocked: proxy.sleep_blocked().ok()?,
+        screen_blocked: proxy.screen_blocked().ok()?,
+        keep_screen_awake: proxy.keep_screen_awake().ok()?,
+        keep_running_in_tray: proxy.keep_running_in_tray().ok()?,
+    })
 }

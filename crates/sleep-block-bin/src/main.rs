@@ -169,6 +169,15 @@ impl eframe::App for App {
     /// hide-to-tray work: no egui pass happens when the window is not shown, so
     /// anything here is the only code still running.
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // The daemon owns everything this window controls, so without it the
+        // GUI is inert: every control would be a request to a process that is
+        // gone. Closing follows the daemon out, whether it left via the tray's
+        // Quit or crashed.
+        if self.client.daemon_gone() {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            return;
+        }
+
         // The daemon owns every lock, so closing this window releases nothing.
         // With hide-on-close enabled the window simply goes away and the daemon
         // keeps running; the tray's "Show window" starts a fresh GUI. That is

@@ -71,6 +71,23 @@ impl TestDaemon {
         Some(proxy)
     }
 
+    /// Starts a GUI pointed at *this* daemon.
+    ///
+    /// Without the override the GUI would connect to the real bus name, spawn
+    /// its own daemon, and be entirely unaffected by anything this test does —
+    /// which is exactly how the first version of these tests fooled itself.
+    fn spawn_gui(&self) -> std::io::Result<Child> {
+        Command::new(env!("CARGO_BIN_EXE_sleep-block"))
+            .env("SLEEP_BLOCK_BUS_NAME", &self.name)
+            .env("SLEEP_BLOCK_GUI_BUS_NAME", format!("{}.Gui", self.name))
+            .spawn()
+    }
+
+    /// Whether a GUI belonging to this daemon is running.
+    fn gui_running(&self) -> bool {
+        name_taken(&format!("{}.Gui", self.name))
+    }
+
     /// A proxy with default caching — the same configuration the GUI uses, so
     /// these tests exercise the cache rather than bypassing it.
     fn proxy(&self) -> SleepBlockServiceProxyBlocking<'static> {
@@ -318,11 +335,11 @@ fn a_running_gui_owns_its_bus_name() {
     let _ = daemon.proxy();
 
     assert!(
-        !gui_name_taken(),
+        !daemon.gui_running(),
         "no GUI should be running before this test starts one"
     );
 
-    let mut gui = match Command::new(env!("CARGO_BIN_EXE_sleep-block")).spawn() {
+    let mut gui = match daemon.spawn_gui() {
         Ok(c) => c,
         Err(_) => {
             eprintln!("SKIP: could not launch the GUI");
@@ -332,7 +349,7 @@ fn a_running_gui_owns_its_bus_name() {
 
     // The GUI needs a display; without one it exits and the name never
     // appears, which is a skip rather than a failure.
-    if !wait_for(gui_name_taken) {
+    if !wait_for(|| daemon.gui_running()) {
         let _ = gui.kill();
         let _ = gui.wait();
         eprintln!("SKIP: the GUI did not start (no display?)");
@@ -344,7 +361,7 @@ fn a_running_gui_owns_its_bus_name() {
     let _ = gui.kill();
     let _ = gui.wait();
     assert!(
-        wait_for(|| !gui_name_taken()),
+        wait_for(|| !daemon.gui_running()),
         "the name must be released when the GUI exits"
     );
 }
@@ -355,14 +372,14 @@ fn a_second_gui_exits_instead_of_opening_a_window() {
     let daemon = daemon_or_skip!("guidup");
     let _ = daemon.proxy();
 
-    let mut first = match Command::new(env!("CARGO_BIN_EXE_sleep-block")).spawn() {
+    let mut first = match daemon.spawn_gui() {
         Ok(c) => c,
         Err(_) => {
             eprintln!("SKIP: could not launch the GUI");
             return;
         }
     };
-    if !wait_for(gui_name_taken) {
+    if !wait_for(|| daemon.gui_running()) {
         let _ = first.kill();
         let _ = first.wait();
         eprintln!("SKIP: the GUI did not start (no display?)");
@@ -372,9 +389,7 @@ fn a_second_gui_exits_instead_of_opening_a_window() {
     // Spawned rather than run with `output()`: the *first* GUI keeps its
     // window open indefinitely, and a blocking wait on the second would hang
     // the suite if this check ever regressed.
-    let mut second = Command::new(env!("CARGO_BIN_EXE_sleep-block"))
-        .spawn()
-        .expect("second GUI should run");
+    let mut second = daemon.spawn_gui().expect("second GUI should run");
 
     let exited = wait_for(|| second.try_wait().ok().flatten().is_some());
     if !exited {
@@ -393,17 +408,18 @@ fn a_second_gui_exits_instead_of_opening_a_window() {
     let _ = first.wait();
 }
 
-/// Whether some process currently owns the GUI's well-known name.
-fn gui_name_taken() -> bool {
+/// Whether any process currently owns the given bus name.
+fn name_taken(name: &str) -> bool {
     let Ok(connection) = zbus::blocking::Connection::session() else {
         return false;
     };
     let Ok(proxy) = zbus::blocking::fdo::DBusProxy::new(&connection) else {
         return false;
     };
-    proxy
-        .name_has_owner(sleep_block_core::ipc::GUI_BUS_NAME.try_into().unwrap())
-        .unwrap_or(false)
+    let Ok(name) = name.try_into() else {
+        return false;
+    };
+    proxy.name_has_owner(name).unwrap_or(false)
 }
 
 /// A client must see changes made by *someone else*.
@@ -468,4 +484,39 @@ fn a_polling_client_observes_preference_changes_made_elsewhere() {
         wait_for(|| !watcher.keep_screen_awake().unwrap_or(true)),
         "and must propagate when turned back off"
     );
+}
+
+/// Quitting the daemon must take any open GUI with it.
+///
+/// The GUI owns nothing: every control is a request to the daemon. Left
+/// running without one it is a window whose buttons all fail silently, so it
+/// follows the daemon out — whether the daemon left via the tray's Quit or
+/// crashed.
+#[test]
+fn quitting_the_daemon_closes_an_open_gui() {
+    let daemon = daemon_or_skip!("guiquit");
+    let proxy = daemon.proxy();
+
+    let mut gui = match daemon.spawn_gui() {
+        Ok(c) => c,
+        Err(_) => {
+            eprintln!("SKIP: could not launch the GUI");
+            return;
+        }
+    };
+    if !wait_for(|| daemon.gui_running()) {
+        let _ = gui.kill();
+        let _ = gui.wait();
+        eprintln!("SKIP: the GUI did not start (no display?)");
+        return;
+    }
+
+    let _ = proxy.quit();
+
+    let closed = wait_for(|| gui.try_wait().ok().flatten().is_some());
+    if !closed {
+        let _ = gui.kill();
+        let _ = gui.wait();
+        panic!("the GUI must not outlive the daemon it depends on");
+    }
 }
