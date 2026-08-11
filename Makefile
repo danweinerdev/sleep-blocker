@@ -23,7 +23,9 @@ APPDIR   := $(DATADIR)/applications
 BIN       := target/release/$(NAME)
 ICON_SIZES := 16 22 24 32 48 64 128 256
 
-RPM_TOPDIR := $(shell rpm --eval '%{_topdir}' 2>/dev/null)
+# Keep RPM build output inside the project rather than polluting ~/rpmbuild.
+# Override with `make package RPM_TOPDIR=/some/where` if you want the default.
+RPM_TOPDIR ?= $(CURDIR)/tmp/rpmbuild
 SPEC       := dist/rpm/$(NAME).spec
 STAGE      := target/package/$(NAME)-$(VERSION)
 
@@ -92,7 +94,6 @@ uninstall:
 # hand off to rpmbuild. The tarball carries binaries, not source.
 package: check build
 	@command -v rpmbuild >/dev/null || { echo "error: rpmbuild not found (dnf install rpm-build)"; exit 1; }
-	@test -n "$(RPM_TOPDIR)" || { echo "error: could not resolve %{_topdir}"; exit 1; }
 	rm -rf target/package
 	mkdir -p $(STAGE)/icons
 	install -pm0755 $(BIN)                  $(STAGE)/$(NAME)
@@ -100,16 +101,20 @@ package: check build
 	install -pm0644 dist/icons/*.png        $(STAGE)/icons/
 	install -pm0644 dist/icons/*.svg        $(STAGE)/icons/
 	install -pm0644 LICENSE README.md       $(STAGE)/
-	mkdir -p $(RPM_TOPDIR)/SOURCES
+	@# rpmbuild expects the whole tree, not just SOURCES, and will not create it.
+	@# Listed individually rather than with brace expansion, which is a bashism
+	@# and make runs recipes under /bin/sh.
+	mkdir -p $(RPM_TOPDIR)/BUILD $(RPM_TOPDIR)/BUILDROOT $(RPM_TOPDIR)/RPMS \
+	         $(RPM_TOPDIR)/SOURCES $(RPM_TOPDIR)/SPECS $(RPM_TOPDIR)/SRPMS
 	tar -C target/package -czf $(RPM_TOPDIR)/SOURCES/$(NAME)-$(VERSION).tar.gz $(NAME)-$(VERSION)
-	rpmbuild -bb $(SPEC)
+	rpmbuild -bb --define '_topdir $(RPM_TOPDIR)' $(SPEC)
 	@echo
 	@echo "Built:"
-	@find $(RPM_TOPDIR)/RPMS -name '$(NAME)-$(VERSION)*.rpm' -newermt '-5 minutes' | sed 's/^/  /'
+	@find $(RPM_TOPDIR)/RPMS -name '$(NAME)-$(VERSION)*.rpm' | sed 's/^/  /'
 
 clean:
 	cargo clean
-	rm -rf target/package
+	rm -rf target/package $(RPM_TOPDIR)
 
 help:
 	@echo "make build     - release build"

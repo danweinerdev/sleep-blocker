@@ -65,8 +65,10 @@ and font stack.
 make package
 ```
 
-Builds the release binary, runs the checks, and produces a binary RPM in
-`~/rpmbuild/RPMS/`. The compile happens in the Makefile using whatever
+Builds the release binary, runs the checks, and produces a binary RPM under
+`tmp/rpmbuild/RPMS/` inside the project, rather than writing to `~/rpmbuild`.
+Override with `make package RPM_TOPDIR=/some/where` if you want it elsewhere;
+`make clean` removes it. The compile happens in the Makefile using whatever
 toolchain is on `PATH`, and `rpmbuild` only stages the finished artefacts —
 so a rustup toolchain works, which a source RPM's `BuildRequires: rust` would
 reject.
@@ -101,6 +103,10 @@ The integration tests run against the real logind and ScreenSaver services
 rather than mocks, because the interaction with those services is the behaviour
 worth testing: a test asserts that a lock actually appears in
 `systemd-inhibit --list` while held and is gone after the value is dropped.
+
+The three tests that count locks serialise against one another with an internal
+mutex: the counts are global to the session, so running them concurrently made
+them fail intermittently. No `--test-threads=1` is needed.
 
 They are therefore environment-dependent. Where a service is missing — a CI
 container with no session bus, a headless builder with no screen locker — the

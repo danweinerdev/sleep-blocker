@@ -11,8 +11,24 @@
 //! inhibitors work. Run them on a real desktop session to get that evidence.
 
 use std::process::Command;
+use std::sync::{Mutex, MutexGuard, OnceLock};
 
 use sleep_block_core::{Inhibitor, ScreenInhibitor};
+
+/// Serialises the tests that count locks.
+///
+/// The counts are global to the session: a test that asserts "one more lock
+/// than before" sees locks taken by any test running concurrently, so the
+/// default multi-threaded harness makes them fail intermittently. Holding this
+/// for the duration of each counting test removes the interference without
+/// requiring callers to remember `--test-threads=1`.
+fn lock_counting() -> MutexGuard<'static, ()> {
+    static SERIAL: OnceLock<Mutex<()>> = OnceLock::new();
+    SERIAL
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+}
 
 /// Reads the `WHO` column of `systemd-inhibit --list`, which is the same view
 /// an administrator gets. Returns `None` when logind is unreachable.
@@ -41,6 +57,8 @@ fn our_lock_count() -> Option<usize> {
 
 #[test]
 fn sleep_inhibitor_appears_in_logind_and_is_released_on_drop() {
+    // Held for the whole test: the assertions below compare global lock counts.
+    let _serial = lock_counting();
     let Some(before) = our_lock_count() else {
         eprintln!("SKIP: systemd-logind unavailable");
         return;
@@ -74,6 +92,8 @@ fn sleep_inhibitor_appears_in_logind_and_is_released_on_drop() {
 
 #[test]
 fn sleep_inhibitor_registers_the_expected_lock_types() {
+    // Held for the whole test: the assertions below compare global lock counts.
+    let _serial = lock_counting();
     let Some(_) = logind_locks() else {
         eprintln!("SKIP: systemd-logind unavailable");
         return;
@@ -102,6 +122,8 @@ fn sleep_inhibitor_registers_the_expected_lock_types() {
 
 #[test]
 fn sleep_inhibitors_are_independent() {
+    // Held for the whole test: the assertions below compare global lock counts.
+    let _serial = lock_counting();
     let Some(before) = our_lock_count() else {
         eprintln!("SKIP: systemd-logind unavailable");
         return;
