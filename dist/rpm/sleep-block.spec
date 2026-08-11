@@ -104,6 +104,19 @@ fi
 %posttrans
 gtk-update-icon-cache -qf %{_datadir}/icons/hicolor &>/dev/null || :
 
+# Deliberately NOT rebuilt here: KDE's service cache (ksycoca), which is what
+# the Icons-Only Task Manager consults to resolve a window's icon from its
+# desktop file. It is per-user and lives in ~/.cache, so a root-run scriptlet
+# cannot correctly rebuild it for every logged-in user — and running
+# kbuildsycoca6 as root would create a root-owned cache or simply do nothing
+# useful.
+#
+# KDE watches the applications directory and normally rebuilds on its own. If a
+# freshly installed application shows a blank taskbar tile despite a correct
+# desktop entry and a resolvable icon, the cache is stale; `kbuildsycoca6
+# --noincremental` fixes it, as does restarting plasmashell or logging out.
+# This bit us during development and cost real time, hence the note.
+
 %files
 %license LICENSE
 %doc README.md

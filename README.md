@@ -104,6 +104,21 @@ make install DESTDIR=/tmp/x  # staged, for inspection
 Both install the binary, the desktop entry, and the icons into the hicolor
 theme so launchers resolve `Icon=sleep-block`.
 
+### Blank taskbar icon after install
+
+If the taskbar shows a blank tile even though the tray icon works and the
+desktop entry is correct, KDE's service cache (ksycoca) is stale. It maps a
+window to its desktop file, and the Icons-Only Task Manager resolves the icon
+through it.
+
+```sh
+kbuildsycoca6 --noincremental
+```
+
+The package cannot do this for you: ksycoca is per-user and lives in
+`~/.cache`, so a root-run scriptlet cannot rebuild it for each logged-in user.
+Restarting plasmashell or logging out has the same effect.
+
 ## Releasing
 
 ```sh
