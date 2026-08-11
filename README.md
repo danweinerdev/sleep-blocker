@@ -104,6 +104,35 @@ make install DESTDIR=/tmp/x  # staged, for inspection
 Both install the binary, the desktop entry, and the icons into the hicolor
 theme so launchers resolve `Icon=sleep-block`.
 
+## Releasing
+
+```sh
+make bump-patch    # 0.1.1 -> 0.1.2
+make bump-minor    # 0.1.1 -> 0.2.0
+make bump-major    # 0.1.1 -> 1.0.0
+```
+
+`Cargo.toml`'s `[workspace.package] version` is the single source of truth. The
+RPM spec receives it as a `--define` from the Makefile rather than declaring its
+own, so the two cannot drift.
+
+Each bump writes the new version, runs the **full containerized build and test**
+including both architectures, and commits and tags only if that succeeds. The
+ordering is deliberate: a failure leaves `Cargo.toml` modified but the history
+untouched, so recovery is `git checkout Cargo.toml` — never unwinding a commit
+or deleting a tag that may already have been pushed.
+
+It refuses to run on a dirty working tree, or when the target tag already
+exists. `scripts/bump-version.py <part> --dry-run` shows the new version
+without touching anything; `--no-verify` skips the build, which commits and
+tags an unverified version and should be rare.
+
+Pushing is left to you:
+
+```sh
+git push && git push origin v<version>
+```
+
 ## Layout
 
 - `crates/sleep-block-core` — the inhibitor logic, with no GUI dependency. Can

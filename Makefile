@@ -233,3 +233,7 @@ help:
 	@echo "make install         - install to PREFIX (default /usr), honours DESTDIR"
 	@echo "make icons           - regenerate PNG icons from SVG (needs ImageMagick)"
 	@echo "make clean           - remove build output and the RPM tree"
+	@echo "make bump-patch      - bump version, build+test, commit and tag"
+	@echo "make bump-minor      - as above, minor version"
+	@echo "make bump-major      - as above, major version"
+	@echo "make version         - print the current version"
