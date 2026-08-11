@@ -234,6 +234,12 @@ impl eframe::App for App {
                     // the previous attempt's error.
                     self.error = None;
                     self.set_keep_screen_awake(keep_screen_awake, ui.ctx());
+                    // Re-read: the daemon is authoritative and may not have
+                    // taken the requested value — acquiring the screen lock can
+                    // fail, in which case the preference is reset. Rendering
+                    // the local guess instead is what left this checkbox
+                    // disagreeing with the tray.
+                    status = self.client.cached();
                 }
 
                 ui.add_space(4.0);
@@ -256,6 +262,7 @@ impl eframe::App for App {
                     .changed();
                 if tray_toggled {
                     self.set_keep_running_in_tray(keep_running, ui.ctx());
+                    status = self.client.cached();
                 }
 
                 // With hide-on-close enabled, the window's close button no

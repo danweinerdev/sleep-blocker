@@ -188,3 +188,40 @@ fn tray_preferences_are_independent_of_the_locks() {
         "a window preference must not acquire an inhibitor"
     );
 }
+
+/// The tray renders its checkmarks from `Status`, and the GUI renders its
+/// checkboxes from the same struct read over D-Bus. If a setter returned a
+/// value that disagreed with a following snapshot, the two surfaces would show
+/// different states for the same setting — which is exactly what a user sees
+/// as "the tray and the window disagree".
+#[test]
+fn setter_return_values_agree_with_a_later_snapshot() {
+    if !screensaver_available() {
+        eprintln!("SKIP: no ScreenSaver provider");
+        return;
+    }
+    let state = SleepBlock::new();
+
+    let returned = state
+        .set_keep_screen_awake(true)
+        .expect("setting the preference should succeed");
+    let observed = state.snapshot();
+    assert_eq!(
+        returned.keep_screen_awake, observed.keep_screen_awake,
+        "a setter's return value must match what the next reader sees"
+    );
+
+    let returned = state.set_keep_running_in_tray(true);
+    let observed = state.snapshot();
+    assert_eq!(
+        returned.keep_running_in_tray, observed.keep_running_in_tray,
+        "the same must hold for the tray preference"
+    );
+
+    // And the reverse direction, which is the case the user hit.
+    let returned = state
+        .set_keep_screen_awake(false)
+        .expect("unsetting should succeed");
+    assert!(!returned.keep_screen_awake);
+    assert!(!state.snapshot().keep_screen_awake);
+}
