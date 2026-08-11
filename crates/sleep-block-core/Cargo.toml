@@ -1,0 +1,8 @@
+[package]
+name = "sleep-block-core"
+description = "Sleep and screen-lock inhibition via systemd-logind and ScreenSaver D-Bus APIs"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+zbus.workspace = true

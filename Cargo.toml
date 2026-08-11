@@ -1,0 +1,17 @@
+[workspace]
+members = ["crates/sleep-block-core"]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+
+[workspace.dependencies]
+zbus = "5.19.0"
+
+# Applies to the whole workspace: `lto = "fat"` lets the optimiser inline across
+# crate boundaries, which matters most for the statically linked GUI stack.
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
