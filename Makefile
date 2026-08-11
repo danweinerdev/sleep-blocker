@@ -27,6 +27,11 @@ ICON_SIZES := 16 22 24 32 48 64 128 256
 # Keep RPM build output inside the project rather than polluting ~/rpmbuild.
 # Override with `make package RPM_TOPDIR=/some/where` if you want the default.
 RPM_TOPDIR ?= $(CURDIR)/tmp/rpmbuild
+
+# Cargo's registry cache, mounted into the container so consecutive builds do
+# not re-download the dependency tree. Kept out of the image because a cache
+# baked into a layer is invalidated by every rebuild.
+CARGO_CACHE ?= $(CURDIR)/tmp/cargo
 SPEC       := dist/rpm/$(NAME).spec
 STAGE      := target/package/$(NAME)-$(VERSION)
 
@@ -135,12 +140,18 @@ container-image:
 # RPM is built from verified *sources* but an unexercised binary. That asymmetry
 # is deliberate and is called out at the end of the run.
 package: container-image
-	mkdir -p $(RPM_TOPDIR)
+	mkdir -p $(RPM_TOPDIR) $(CARGO_CACHE)
+	@# CARGO_HOME is overridden to the mounted cache so the registry survives
+	@# between runs. The image's own /opt/cargo holds only the toolchain
+	@# binaries, and PATH points at them directly, so repointing CARGO_HOME
+	@# does not hide cargo itself.
 	$(CONTAINER_RUNTIME) run --rm \
 	    -v "$(CURDIR)":/src$(MOUNT_FLAG) \
 	    -v "$(RPM_TOPDIR)":/rpmbuild$(MOUNT_FLAG) \
+	    -v "$(CARGO_CACHE)":/cargo$(MOUNT_FLAG) \
 	    -w /src \
 	    -e RPM_TOPDIR=/rpmbuild \
+	    -e CARGO_HOME=/cargo \
 	    $(IMAGE) \
 	    make -f Makefile package-in-container
 	@echo
@@ -215,12 +226,21 @@ version:
 
 # Drop into the build container for debugging.
 container-shell: container-image
+	mkdir -p $(CARGO_CACHE)
 	$(CONTAINER_RUNTIME) run --rm -it \
-	    -v "$(CURDIR)":/src$(MOUNT_FLAG) -w /src $(IMAGE) /bin/bash
+	    -v "$(CURDIR)":/src$(MOUNT_FLAG) \
+	    -v "$(CARGO_CACHE)":/cargo$(MOUNT_FLAG) \
+	    -w /src -e CARGO_HOME=/cargo $(IMAGE) /bin/bash
 
 clean:
 	cargo clean
 	rm -rf target/package $(RPM_TOPDIR)
+
+# `clean` deliberately keeps the download cache -- discarding it on every clean
+# would defeat its purpose. This removes it too.
+.PHONY: distclean
+distclean: clean
+	rm -rf $(CARGO_CACHE)
 
 help:
 	@echo "make build           - native release build"

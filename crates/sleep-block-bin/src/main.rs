@@ -100,6 +100,10 @@ struct App {
     /// detected. Comparing against the shared state is what lets the tray
     /// trigger a show without reaching into the window directly.
     window_was_hidden: bool,
+    /// Set by the in-window Quit button. Without it the close command that
+    /// button sends would be caught by the hide-on-close handler and turned
+    /// into another hide, making the button do nothing.
+    quitting: bool,
 }
 
 impl App {
@@ -109,6 +113,7 @@ impl App {
             tray,
             error: None,
             window_was_hidden: false,
+            quitting: false,
         }
     }
 
@@ -146,16 +151,22 @@ impl eframe::App for App {
     /// hide-to-tray work: no egui pass happens when the window is not shown, so
     /// anything here is the only code still running.
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let status = self.state.snapshot();
+        let mut status = self.state.snapshot();
 
         // Intercept the window manager's close request. Cancelling it and
         // hiding the viewport keeps the process — and therefore the tray —
         // alive. Without the cancel, eframe exits the moment the request
         // arrives.
-        if ctx.input(|i| i.viewport().close_requested()) && status.keep_running_in_tray {
+        if ctx.input(|i| i.viewport().close_requested())
+            && status.keep_running_in_tray
+            && !self.quitting
+        {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
-            self.state.set_window_hidden(true);
+            // Take the returned status rather than reusing the snapshot from
+            // the top of the frame: that one still says the window is visible,
+            // and the show-again check below would immediately undo the hide.
+            status = self.state.set_window_hidden(true);
             self.refresh_tray();
         }
 
@@ -251,6 +262,23 @@ impl eframe::App for App {
                     .changed();
                 if tray_toggled {
                     self.set_keep_running_in_tray(keep_running);
+                }
+
+                // With hide-on-close enabled, the window's close button no
+                // longer quits, so the window needs its own way out. Relying on
+                // the tray menu alone strands the user if the tray icon is not
+                // visible for any reason.
+                if status.keep_running_in_tray {
+                    ui.add_space(10.0);
+                    if ui
+                        .button("Quit")
+                        .on_hover_text("Release all locks and exit.")
+                        .clicked()
+                    {
+                        self.quitting = true;
+                        self.state.release_all();
+                        ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                    }
                 }
 
                 if let Some(error) = &self.error {

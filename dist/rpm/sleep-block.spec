@@ -82,6 +82,28 @@ install -Dpm0644 README.md %{buildroot}%{_datadir}/doc/%{name}/README.md
 %check
 desktop-file-validate %{buildroot}%{_datadir}/applications/%{name}.desktop
 
+# Installing icon files is not enough: the hicolor theme keeps a binary cache,
+# and lookups consult it rather than scanning the directories. Without these
+# scriptlets a freshly installed icon is invisible until something else happens
+# to rebuild the cache, which is exactly the "no icon" symptom.
+#
+# Failures are tolerated because a missing icon is cosmetic and must never make
+# a transaction fail; on a headless system the tools may not be present at all.
+%post
+touch --no-create %{_datadir}/icons/hicolor &>/dev/null || :
+gtk-update-icon-cache -qf %{_datadir}/icons/hicolor &>/dev/null || :
+update-desktop-database -q &>/dev/null || :
+
+%postun
+if [ $1 -eq 0 ]; then
+    touch --no-create %{_datadir}/icons/hicolor &>/dev/null || :
+    gtk-update-icon-cache -qf %{_datadir}/icons/hicolor &>/dev/null || :
+    update-desktop-database -q &>/dev/null || :
+fi
+
+%posttrans
+gtk-update-icon-cache -qf %{_datadir}/icons/hicolor &>/dev/null || :
+
 %files
 %license LICENSE
 %doc README.md
