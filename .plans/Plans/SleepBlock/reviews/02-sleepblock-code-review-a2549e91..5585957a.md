@@ -51,11 +51,11 @@ followups:
   - id: FU-01
     finding: F-16
     summary: "Log PropertiesChanged emission failures so a stuck indicator has a trail"
-    tracked_in: "5.8"
+    tracked_in: "6.1"
   - id: FU-02
     finding: F-17
     summary: "Add a make package evidence row to phase 5, or note AC-33's container half was verified in phase 4"
-    tracked_in: "5.9"
+    tracked_in: "6.2"
 ---
 
 # Code Review: SleepBlock — Phase 5 (second pass)
@@ -132,7 +132,7 @@ on the stream.
 
 `Service::announce` uses `let _ = ...await` on all four emissions. Self-healing
 within ~0.5s via polling, so low impact — but a maintainer debugging a stuck
-indicator has nothing to grep for. Tracked as FU-01, plan task 5.8.
+indicator has nothing to grep for. Tracked as FU-01, plan task 6.1.
 
 ## Quality (from quality-scanner)
 
@@ -270,11 +270,11 @@ Interfaces table updated: `ipc` listed, `set_keep_running_in_tray` and
 Merged the duplicated summary sentences on `DaemonClient::connect`.
 
 ### F-16 — deferred (2026-08-11)
-Tracked as FU-01, plan task 5.8. Self-healing via polling; worth a log line, not worth
+Tracked as FU-01, plan task 6.1. Self-healing via polling; worth a log line, not worth
 blocking on.
 
 ### F-17 — deferred (2026-08-11)
-Tracked as FU-02, plan task 5.9. A documentation-evidence gap, not a functional one.
+Tracked as FU-02, plan task 6.2. A documentation-evidence gap, not a functional one.
 
 ## Orchestrator Observations
 

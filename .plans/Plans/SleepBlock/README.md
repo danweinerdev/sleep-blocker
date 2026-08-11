@@ -29,9 +29,14 @@ phases:
     depends_on: [3]
   - id: 5
     title: "Daemon Split and State Synchronisation"
-    status: in-progress
+    status: complete
     doc: "05-Daemon-Split-And-Sync.md"
     depends_on: [4]
+  - id: 6
+    title: "Review Follow-ups"
+    status: planned
+    doc: "06-Review-Followups.md"
+    depends_on: [5]
 ---
 
 # Sleep Block — Implementation Plan

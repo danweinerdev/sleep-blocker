@@ -3,7 +3,7 @@ title: "Daemon Split and State Synchronisation"
 type: phase
 plan: "SleepBlock"
 phase: 5
-status: in-progress
+status: complete
 created: 2026-08-11
 updated: 2026-08-11
 deliverable: "A daemon owning the inhibitors and tray, a disposable GUI client, and reliable state propagation between them"
@@ -49,18 +49,6 @@ tasks:
     verification: "Tray Quit and the GUI's Quit button each stop both processes and release all locks; measured GUI exit latency 104ms. Serves FR-20."
     justifies: "Delivers FR-20 and satisfies AC-29. Quit from the tray left an orphaned window whose every control failed silently."
     depends_on: ["5.6"]
-  - id: "5.8"
-    title: "Log PropertiesChanged emission failures"
-    status: deferred
-    verification: "A failed property emission leaves a line in the daemon's log rather than only a slightly-late indicator. Serves NFR-08."
-    justifies: "Carries review finding F-16. Announce currently discards all four emission results, so a stuck-looking indicator has no trail to grep -- the polling fallback hides the failure rather than reporting it."
-    depends_on: ["5.7"]
-  - id: "5.9"
-    title: "Give AC-33 an evidence row in this phase"
-    status: deferred
-    verification: "A Completion Evidence row in this phase runs make package, or the phase records that AC-33's container half was verified in phase 4 and only release supersession is new here."
-    justifies: "Carries review finding F-17. AC-33 is checked off with no make package run evidenced in this phase; its container and multi-arch half was inherited from phase 4."
-    depends_on: ["5.7"]
 ---
 
 # Phase 5: Daemon Split and State Synchronisation
@@ -314,40 +302,6 @@ nothing.
 | tray Quit with a GUI open | . | PASS (exit 0) | both processes gone; 0 locks held; GUI exited in 104ms |
 | `cargo test --release` | . | PASS (exit 0) | 39 passed |
 
-## 5.8: Log PropertiesChanged emission failures
-
-Deferred out of this phase (2026-08-11), carrying review finding F-16.
-
-### Subtasks
-- [x] Deferred — not attempted in this phase
-
-### Notes
-Revision boundary: none taken. `Service::announce` still discards its emission
-results, so a failed emission leaves no trail. The polling fallback means the
-user-visible effect is at worst a slightly late indicator, which is why this was
-judged not worth holding the phase open for.
-
-### Completion Evidence
-
-Deferred — no revision claimed. Tracked by review 02 finding F-16 (FU-01).
-
-## 5.9: Give AC-33 an evidence row in this phase
-
-Deferred out of this phase (2026-08-11), carrying review finding F-17.
-
-### Subtasks
-- [x] Deferred — not attempted in this phase
-
-### Notes
-Revision boundary: none taken. AC-33's container and multi-architecture half was
-built and evidenced in phase 4; only the release-supersession half is new here,
-and that is evidenced under task 5.1. The gap is that no row in *this* phase
-re-runs `make package`.
-
-### Completion Evidence
-
-Deferred — no revision claimed. Tracked by review 02 finding F-17 (FU-02).
-
 ## Acceptance Criteria
 - [x] **AC-24**: The daemon exports its interface and every rendered property is readable.
 - [x] **AC-25**: A toggle through the daemon acquires and releases a real logind lock.
@@ -362,4 +316,40 @@ Deferred — no revision claimed. Tracked by review 02 finding F-17 (FU-02).
 
 ## Phase Completion Evidence
 
-Pending — not complete.
+- Verified: 2026-08-11
+- Repository: ~/Development/Code/sleep-block
+- VCS: git
+- Revision / checkpoint: 14b3c77aff8f002d8b386bedbcf566a36605ea9f
+- Identity recheck: git rev-parse HEAD, 2026-08-11 11:20, matches recorded revision 14b3c77aff8f002d8b386bedbcf566a36605ea9f
+- Final aligned review: Plans/SleepBlock/reviews/03-sleepblock-code-review-a2549e91..d63f2ddd.md; frozen: a2549e91c0f971c108a026ef1f49c9a41c4a69b9..d63f2ddd0c061af0a8f4d27e0c3758a8a7a6d7de
+
+| Command | Working directory | Result | Observable evidence |
+|---|---|---|---|
+| `cargo test --release -- --test-threads=1` | . | PASS (exit 0) | 43 passed across five suites; 0 failed |
+| `cargo clippy --release --all-targets -- -D warnings` | . | PASS (exit 0) | no warnings emitted |
+| `cargo fmt --check` | . | PASS (exit 0) | no formatting diff |
+
+### Completed task identities
+
+- `5.1`: `c19526f38fdb943619d49eab9d5e106af405f91c`
+- `5.2`: `83e2fb257caca24183d8d43aea84af0ca0b8f35f`
+- `5.3`: `4886fa6af79dc15336a9095172462c17d0a4a64c`
+- `5.4`: `62b114bc77066a256d4d0953fec80647987e526a`
+- `5.5`: `3d2c7ec839aa84296f51d27d644153e06ed9d6d5`
+- `5.6`: `34418f1101978216f81388439c9a6d2aaa2f5585`
+- `5.7`: `ee0357134ba6f387d2b4e57eb4acb31d291296d4`
+
+The two follow-ups this phase's reviews raised (F-16, F-17) moved to phase 6
+rather than being deferred inside a completed phase.
+
+### Completion caveat
+
+This phase was closed on an explicit user decision, not by satisfying the
+completion gate. Three four-lane reviews were run; none returned Aligned across
+all four lanes. The third pass left `quality-scanner` at Concerning — resting
+entirely on a finding this review rejected on evidence (F-24) — and
+`blind-spot-finder` at Elevated, on an architectural note answered by
+measurement rather than fixed (F-23).
+
+Recorded here rather than papered over: a reader should not infer from
+`status: complete` that the gate was met.
