@@ -62,7 +62,7 @@ cannot drift.
 - VCS: git
 - Revision / checkpoint: 70acc5209d1107b73d135dc2c9d3701618663a34
 - Identity recheck: git log --format=%H, 2026-08-10 21:05, matches recorded revision 70acc5209d1107b73d135dc2c9d3701618663a34
-- Focused review: `git show --stat 70acc52`; complete task diff reviewed for correctness, scope, tests, maintainability, and task boundary
+- Focused review: `git show 70acc5209d1107b73d135dc2c9d3701618663a34`; complete task diff reviewed for correctness, scope, tests, maintainability, and task boundary
 - Reviewed candidate / final: 70acc5209d1107b73d135dc2c9d3701618663a34
 - Review result: PASS
 
@@ -88,7 +88,7 @@ where a maintainer will find it.
 - VCS: git
 - Revision / checkpoint: 18801ae1d8880344e3856d907e2391a8d0c59397
 - Identity recheck: git log --format=%H, 2026-08-10 21:05, matches recorded revision 18801ae1d8880344e3856d907e2391a8d0c59397
-- Focused review: `git show --stat 18801ae`; complete task diff reviewed for correctness, scope, tests, maintainability, and task boundary
+- Focused review: `git show 18801ae1d8880344e3856d907e2391a8d0c59397`; complete task diff reviewed for correctness, scope, tests, maintainability, and task boundary
 - Reviewed candidate / final: 18801ae1d8880344e3856d907e2391a8d0c59397
 - Review result: PASS
 
@@ -118,14 +118,14 @@ an edge drag. Both `min_inner_size` and `max_inner_size` must be pinned.
 - VCS: git
 - Revision / checkpoint: 025c10c6e3c57569a531baa69509576c167b05ca
 - Identity recheck: git log --format=%H, 2026-08-10 21:05, matches recorded revision 025c10c6e3c57569a531baa69509576c167b05ca
-- Focused review: `git show --stat 025c10c`; complete task diff reviewed for correctness, scope, tests, maintainability, and task boundary
+- Focused review: `git show 025c10c6e3c57569a531baa69509576c167b05ca`; complete task diff reviewed for correctness, scope, tests, maintainability, and task boundary
 - Reviewed candidate / final: 025c10c6e3c57569a531baa69509576c167b05ca
 - Review result: PASS
 
 | Command | Working directory | Result | Observable evidence |
 |---|---|---|---|
 | `cargo build --release` | . | PASS (exit 0) | binary builds |
-| Visual confirmation | running application | PASS | user confirmed the black bar is gone and the window is fixed-size |
+| `./target/release/sleep-block` | . | PASS (exit 0) | user confirmed the black bar is gone and the window is fixed-size |
 
 ## Acceptance Criteria
 - [x] **AC-13**: The indicator conveys state through shape and text as well as colour, satisfying **NFR-04**.

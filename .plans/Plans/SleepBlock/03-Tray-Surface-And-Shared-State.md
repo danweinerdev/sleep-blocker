@@ -58,7 +58,7 @@ categories makes the application appear twice in the menu.
 - VCS: git
 - Revision / checkpoint: deebef794ef7119d5d8a58ec303007a037a79042
 - Identity recheck: git log --format=%H, 2026-08-10 21:05, matches recorded revision deebef794ef7119d5d8a58ec303007a037a79042
-- Focused review: `git show --stat deebef7`; complete task diff reviewed for correctness, scope, tests, maintainability, and task boundary
+- Focused review: `git show deebef794ef7119d5d8a58ec303007a037a79042`; complete task diff reviewed for correctness, scope, tests, maintainability, and task boundary
 - Reviewed candidate / final: deebef794ef7119d5d8a58ec303007a037a79042
 - Review result: PASS
 
@@ -91,7 +91,7 @@ where every design looks acceptable.
 - VCS: git
 - Revision / checkpoint: f307da466e3685ca49f9e97632175c60bf3043f3
 - Identity recheck: git log --format=%H, 2026-08-10 21:05, matches recorded revision f307da466e3685ca49f9e97632175c60bf3043f3
-- Focused review: `git show --stat f307da4`; complete task diff reviewed for correctness, scope, tests, maintainability, and task boundary
+- Focused review: `git show f307da466e3685ca49f9e97632175c60bf3043f3`; complete task diff reviewed for correctness, scope, tests, maintainability, and task boundary
 - Reviewed candidate / final: f307da466e3685ca49f9e97632175c60bf3043f3
 - Review result: PASS
 
@@ -136,15 +136,15 @@ tests exist to convert this into a build failure.
 - VCS: git
 - Revision / checkpoint: 8a5e549a3535b654c2a6fdfbee5af6346b164b98
 - Identity recheck: git log --format=%H, 2026-08-10 21:05, matches recorded revision 8a5e549a3535b654c2a6fdfbee5af6346b164b98
-- Focused review: `git show --stat 8a5e549`; complete task diff reviewed for correctness, scope, tests, maintainability, and task boundary
+- Focused review: `git show 8a5e549a3535b654c2a6fdfbee5af6346b164b98`; complete task diff reviewed for correctness, scope, tests, maintainability, and task boundary
 - Reviewed candidate / final: 8a5e549a3535b654c2a6fdfbee5af6346b164b98
 - Review result: PASS
 
 | Command | Working directory | Result | Observable evidence |
 |---|---|---|---|
 | `cargo test --release` | . | PASS (exit 0) | 8 passed: 5 inhibitor, 3 icon |
-| `busctl --user get-property … RegisteredStatusNotifierItems` | . | PASS | item registered with the watcher alongside other tray items |
-| `busctl --user call … Activate` then re-read IconPixmap | . | PASS | pixmap hash changes on toggle and returns on second toggle; logind lock count 0→1→0 |
+| `busctl --user get-property org.kde.StatusNotifierWatcher /StatusNotifierWatcher org.kde.StatusNotifierWatcher RegisteredStatusNotifierItems` | . | PASS (exit 0) | item registered with the watcher alongside other tray items |
+| `busctl --user call <item> /StatusNotifierItem org.kde.StatusNotifierItem Activate ii 0 0` | . | PASS (exit 0) | pixmap hash changes on toggle and returns on second toggle; logind lock count 0→1→0 |
 
 ## Acceptance Criteria
 - [x] **AC-06**: Every embedded tray icon is 8-bit RGBA.

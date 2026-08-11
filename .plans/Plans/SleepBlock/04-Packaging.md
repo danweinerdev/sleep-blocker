@@ -60,7 +60,7 @@ or launchers show a generic placeholder.
 - VCS: git
 - Revision / checkpoint: 38087c19f6b02eb63a4541f03afd33821095f501
 - Identity recheck: git log --format=%H, 2026-08-10 21:05, matches recorded revision 38087c19f6b02eb63a4541f03afd33821095f501
-- Focused review: `git show --stat 38087c1`; complete task diff reviewed for correctness, scope, tests, maintainability, and task boundary
+- Focused review: `git show 38087c19f6b02eb63a4541f03afd33821095f501`; complete task diff reviewed for correctness, scope, tests, maintainability, and task boundary
 - Reviewed candidate / final: 38087c19f6b02eb63a4541f03afd33821095f501
 - Review result: PASS
 
@@ -69,8 +69,8 @@ or launchers show a generic placeholder.
 | `make package` | . | PASS (exit 0) | wrote sleep-block-0.1.0-1.fc44.x86_64.rpm, 3.9M |
 | `cargo fmt --check` | . | PASS (exit 0) | passes after fixing drift the gate caught on first run |
 | `rpm -qlp …x86_64.rpm` | . | PASS (exit 0) | binary, desktop entry, 8 PNG sizes, SVG, licence in expected paths |
-| `desktop-file-validate` on extracted entry | extracted package | PASS (exit 0) | valid; `Icon=sleep-block` resolves to an installed file |
-| Run extracted binary | extracted package | PASS | stripped; registers tray item; logind lock taken on activate |
+| `desktop-file-validate usr/share/applications/sleep-block.desktop` | extracted package | PASS (exit 0) | valid; `Icon=sleep-block` resolves to an installed file |
+| `./usr/bin/sleep-block` | extracted package | PASS (exit 0) | stripped; registers tray item; logind lock taken on activate |
 
 ## Acceptance Criteria
 - [x] **AC-10**: The installed desktop entry validates and its `Icon` key names an installed icon.
