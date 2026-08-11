@@ -12,7 +12,7 @@ dirty but the history untouched, so the fix is `git checkout Cargo.toml` rather
 than unwinding a bad commit or deleting a published tag.
 
 Usage:
-    ./bump-version.py <major|minor|patch> [--dry-run] [--no-verify]
+    scripts/bump-version.py <major|minor|patch> [--dry-run] [--no-verify]
 """
 
 from __future__ import annotations
@@ -23,7 +23,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent
+# This script lives in scripts/, so the project root is its parent's parent.
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 CARGO_TOML = PROJECT_ROOT / "Cargo.toml"
 
 # Matches the workspace version line specifically. Anchored to the

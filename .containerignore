@@ -13,6 +13,7 @@ vendor/
 .gitignore
 .plans/
 planning-config.json
+scripts/
 
 # Editor and tooling state.
 .vscode/

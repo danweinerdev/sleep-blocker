@@ -204,11 +204,11 @@ package-arch:
 # but the history untouched.
 .PHONY: bump-major bump-minor bump-patch version
 bump-major:
-	./bump-version.py major
+	./scripts/bump-version.py major
 bump-minor:
-	./bump-version.py minor
+	./scripts/bump-version.py minor
 bump-patch:
-	./bump-version.py patch
+	./scripts/bump-version.py patch
 
 version:
 	@echo $(VERSION)
