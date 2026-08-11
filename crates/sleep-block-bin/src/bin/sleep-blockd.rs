@@ -123,6 +123,11 @@ impl Service {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // The bus name is overridable so a test can run its own daemon without
+    // fighting the user's real one for the well-known name. Unset in normal
+    // use, which is the only case that matters for correctness.
+    let bus_name = std::env::var("SLEEP_BLOCK_BUS_NAME").unwrap_or_else(|_| BUS_NAME.to_string());
+
     let state = SleepBlock::new();
 
     let has_tray = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -135,17 +140,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Requesting the name is also the single-instance check: if another daemon
     // holds it, this build fails here rather than racing it for the tray icon.
-    let connection = match zbus::blocking::connection::Builder::session()?
-        .name(BUS_NAME)?
+    let connection = zbus::blocking::connection::Builder::session()?
         .serve_at(OBJECT_PATH, service)?
-        .build()
+        .build()?;
+
+    // Requesting the name explicitly rather than via the builder: the builder
+    // reports success even when another process already owns it, so it cannot
+    // serve as the single-instance check. `PrimaryOwner` is the only reply that
+    // means this process actually got it.
+    use zbus::fdo::{RequestNameFlags, RequestNameReply};
+    // A taken name comes back as an Err(NameTaken) rather than a non-primary
+    // reply, so both shapes are treated as "someone else is running".
+    match connection.request_name_with_flags(bus_name.as_str(), RequestNameFlags::DoNotQueue.into())
     {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("sleep-blockd is already running (or the bus is unavailable): {e}");
+        Ok(RequestNameReply::PrimaryOwner) => {}
+        Ok(_) | Err(zbus::Error::NameTaken) => {
+            eprintln!("sleep-blockd is already running ({bus_name} is taken); exiting");
             return Ok(());
         }
-    };
+        Err(e) => return Err(e.into()),
+    }
 
     // The tray lives here rather than in the GUI so it survives the window
     // closing — the entire point of the split.
