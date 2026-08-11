@@ -76,9 +76,18 @@ fn main() -> eframe::Result {
     // without the user needing to know a daemon exists.
     let client = match DaemonClient::connect() {
         Ok(c) => c,
+        Err(sleep_block_app::client::ConnectError::AlreadyRunning) => {
+            // Not an error: the user asked for a window and one is already
+            // open. Exiting quietly is the right response.
+            //
+            // `exit` rather than returning: zbus keeps executor threads alive,
+            // and returning from main would leave the process sleeping in
+            // ep_poll instead of terminating.
+            std::process::exit(0);
+        }
         Err(e) => {
-            eprintln!("cannot reach the sleep-block daemon: {e}");
-            return Ok(());
+            eprintln!("cannot start: {e}");
+            std::process::exit(1);
         }
     };
 

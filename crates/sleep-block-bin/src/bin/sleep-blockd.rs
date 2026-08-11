@@ -104,11 +104,6 @@ impl Service {
         // A property setter's own change signal is emitted by zbus.
         self.state.set_keep_running_in_tray(wanted);
     }
-
-    #[zbus(signal)]
-    async fn show_window_requested(
-        emitter: &zbus::object_server::SignalEmitter<'_>,
-    ) -> zbus::Result<()>;
 }
 
 impl Service {

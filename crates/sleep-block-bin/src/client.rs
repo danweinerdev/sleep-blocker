@@ -8,11 +8,37 @@
 //! a lock owned here would be released the instant this window closed.
 
 use sleep_block_core::Status;
-use sleep_block_core::ipc::SleepBlockServiceProxyBlocking;
+use sleep_block_core::ipc::{GUI_BUS_NAME, SleepBlockServiceProxyBlocking};
+
+/// Why the GUI could not start.
+#[derive(Debug)]
+pub enum ConnectError {
+    /// Another GUI already has a window open.
+    AlreadyRunning,
+    /// No daemon could be reached or started.
+    DaemonUnavailable,
+    /// The session bus itself is unusable.
+    Bus(zbus::Error),
+}
+
+impl std::fmt::Display for ConnectError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::AlreadyRunning => write!(f, "a sleep-block window is already open"),
+            Self::DaemonUnavailable => write!(f, "the sleep-block daemon did not start"),
+            Self::Bus(e) => write!(f, "session bus unavailable: {e}"),
+        }
+    }
+}
+
+impl std::error::Error for ConnectError {}
 
 /// Connection to the daemon, plus the last state it reported.
 pub struct DaemonClient {
     proxy: SleepBlockServiceProxyBlocking<'static>,
+    /// Held for the GUI's lifetime. Dropping it releases the GUI's bus name,
+    /// which is how the daemon learns the window is gone.
+    _connection: zbus::blocking::Connection,
     /// Whether the daemon has a tray, read once at connect: it cannot change
     /// while the daemon runs.
     has_tray: bool,
@@ -26,8 +52,22 @@ impl DaemonClient {
     ///
     /// Launching the daemon here means the GUI can be started directly (from a
     /// launcher or the command line) without the user knowing a daemon exists.
-    pub fn connect() -> Result<Self, zbus::Error> {
-        let connection = zbus::blocking::Connection::session()?;
+    /// Connects to a daemon, claiming the GUI name so only one window runs.
+    ///
+    /// Returns `Err(AlreadyRunning)` when another GUI holds the name — the
+    /// caller should exit quietly rather than opening a second window.
+    pub fn connect() -> Result<Self, ConnectError> {
+        let connection = zbus::blocking::Connection::session().map_err(ConnectError::Bus)?;
+
+        // Claiming this is what stops "Show window" stacking up windows: the
+        // daemon checks the name first, and a GUI that loses the race exits.
+        use zbus::fdo::{RequestNameFlags, RequestNameReply};
+        match connection.request_name_with_flags(GUI_BUS_NAME, RequestNameFlags::DoNotQueue.into())
+        {
+            Ok(RequestNameReply::PrimaryOwner) => {}
+            Ok(_) | Err(zbus::Error::NameTaken) => return Err(ConnectError::AlreadyRunning),
+            Err(e) => return Err(ConnectError::Bus(e)),
+        }
 
         let proxy = match SleepBlockServiceProxyBlocking::new(&connection) {
             Ok(p) if p.sleep_blocked().is_ok() => p,
@@ -46,7 +86,7 @@ impl DaemonClient {
                         break;
                     }
                 }
-                found.ok_or_else(|| zbus::Error::Failure("daemon did not start".into()))?
+                found.ok_or(ConnectError::DaemonUnavailable)?
             }
         };
 
@@ -54,6 +94,7 @@ impl DaemonClient {
         let has_tray = proxy.has_tray().unwrap_or(false);
         Ok(Self {
             proxy,
+            _connection: connection,
             has_tray,
             last,
         })

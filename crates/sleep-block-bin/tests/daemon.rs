@@ -307,3 +307,101 @@ fn quit_releases_locks_and_stops_the_daemon() {
         "and the process must actually exit"
     );
 }
+
+/// The GUI owns a well-known name for its lifetime, which is what lets the
+/// daemon tell whether a window is already open. Without it, every "Show
+/// window" click would start another process: on Wayland a running GUI cannot
+/// be raised, so there is nothing to bring forward.
+#[test]
+fn a_running_gui_owns_its_bus_name() {
+    let daemon = daemon_or_skip!("guiname");
+    let _ = daemon.proxy();
+
+    assert!(
+        !gui_name_taken(),
+        "no GUI should be running before this test starts one"
+    );
+
+    let mut gui = match Command::new(env!("CARGO_BIN_EXE_sleep-block")).spawn() {
+        Ok(c) => c,
+        Err(_) => {
+            eprintln!("SKIP: could not launch the GUI");
+            return;
+        }
+    };
+
+    // The GUI needs a display; without one it exits and the name never
+    // appears, which is a skip rather than a failure.
+    if !wait_for(gui_name_taken) {
+        let _ = gui.kill();
+        let _ = gui.wait();
+        eprintln!("SKIP: the GUI did not start (no display?)");
+        return;
+    }
+
+    // Killing it must release the name, or the daemon would believe a window
+    // is open forever and refuse to ever show one again.
+    let _ = gui.kill();
+    let _ = gui.wait();
+    assert!(
+        wait_for(|| !gui_name_taken()),
+        "the name must be released when the GUI exits"
+    );
+}
+
+/// A second GUI must not open a second window.
+#[test]
+fn a_second_gui_exits_instead_of_opening_a_window() {
+    let daemon = daemon_or_skip!("guidup");
+    let _ = daemon.proxy();
+
+    let mut first = match Command::new(env!("CARGO_BIN_EXE_sleep-block")).spawn() {
+        Ok(c) => c,
+        Err(_) => {
+            eprintln!("SKIP: could not launch the GUI");
+            return;
+        }
+    };
+    if !wait_for(gui_name_taken) {
+        let _ = first.kill();
+        let _ = first.wait();
+        eprintln!("SKIP: the GUI did not start (no display?)");
+        return;
+    }
+
+    // Spawned rather than run with `output()`: the *first* GUI keeps its
+    // window open indefinitely, and a blocking wait on the second would hang
+    // the suite if this check ever regressed.
+    let mut second = Command::new(env!("CARGO_BIN_EXE_sleep-block"))
+        .spawn()
+        .expect("second GUI should run");
+
+    let exited = wait_for(|| second.try_wait().ok().flatten().is_some());
+    if !exited {
+        let _ = second.kill();
+        let _ = second.wait();
+        let _ = first.kill();
+        let _ = first.wait();
+        panic!("a duplicate GUI must exit rather than open a second window");
+    }
+    assert!(
+        second.wait().map(|s| s.success()).unwrap_or(false),
+        "a duplicate launch is not an error condition"
+    );
+
+    let _ = first.kill();
+    let _ = first.wait();
+}
+
+/// Whether some process currently owns the GUI's well-known name.
+fn gui_name_taken() -> bool {
+    let Ok(connection) = zbus::blocking::Connection::session() else {
+        return false;
+    };
+    let Ok(proxy) = zbus::blocking::fdo::DBusProxy::new(&connection) else {
+        return false;
+    };
+    proxy
+        .name_has_owner(sleep_block_core::ipc::GUI_BUS_NAME.try_into().unwrap())
+        .unwrap_or(false)
+}

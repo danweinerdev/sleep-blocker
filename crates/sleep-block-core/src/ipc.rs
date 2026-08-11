@@ -17,6 +17,13 @@
 /// single-instance mechanism.
 pub const BUS_NAME: &str = "net.phantomnet.SleepBlock1";
 
+/// The name a running GUI owns.
+///
+/// Serves two purposes: the daemon checks it before launching a GUI, so
+/// "Show window" cannot pile up duplicate processes, and a second GUI that
+/// cannot take it knows one is already on screen and exits.
+pub const GUI_BUS_NAME: &str = "net.phantomnet.SleepBlock1.Gui";
+
 /// The object the interface is served at.
 pub const OBJECT_PATH: &str = "/net/phantomnet/SleepBlock1";
 
@@ -70,11 +77,4 @@ pub trait SleepBlockService {
 
     #[zbus(property)]
     fn set_keep_running_in_tray(&self, wanted: bool) -> zbus::Result<()>;
-
-    /// Emitted when the daemon wants the GUI on screen — the tray's
-    /// "Show window" item. The GUI cannot un-minimise or un-hide itself on
-    /// Wayland, so "showing" is the daemon launching a fresh GUI process; this
-    /// signal exists so an *already running* GUI does not get a second copy.
-    #[zbus(signal)]
-    fn show_window_requested(&self) -> zbus::Result<()>;
 }
