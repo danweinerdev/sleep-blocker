@@ -65,19 +65,36 @@ and font stack.
 make package
 ```
 
-Builds the release binary, runs the checks, and produces a binary RPM under
-`tmp/rpmbuild/RPMS/` inside the project, rather than writing to `~/rpmbuild`.
-Override with `make package RPM_TOPDIR=/some/where` if you want it elsewhere;
-`make clean` removes it. The compile happens in the Makefile using whatever
-toolchain is on `PATH`, and `rpmbuild` only stages the finished artefacts —
-so a rustup toolchain works, which a source RPM's `BuildRequires: rust` would
-reject.
+Builds **both** architectures and produces two RPMs under `tmp/rpmbuild/RPMS/`:
 
-`make package` runs `make check` first, which is tests plus `clippy -D
-warnings`, `cargo fmt --check`, and desktop-file validation. A lint regression
-fails the package rather than shipping.
+| Package | Built | Tested |
+| --- | --- | --- |
+| `sleep-block-<ver>.<native>.rpm` | natively | yes — full suite |
+| `sleep-block-<ver>.<foreign>.rpm` | cross-compiled | **no** |
 
-To install without RPM:
+Everything runs inside a container built from `Containerfile`, so the result
+does not depend on what is installed on the host. `make package` detects
+`podman` (preferred, rootless) or `docker`, builds the toolchain image, then
+inside it: builds and tests the native architecture, cross-builds the other,
+and packages both. `tmp/rpmbuild` is bind-mounted, so the RPMs land on the host.
+
+**Only the native binary is tested.** A cross-built binary cannot execute on
+the build host, and the integration tests need a live logind session besides.
+The foreign RPM is therefore built from tested *sources* but contains an
+unexercised binary — the run prints this at the end rather than leaving it
+implied.
+
+Useful overrides:
+
+```sh
+make package RPM_TOPDIR=/some/where   # write RPMs elsewhere
+make container-shell                  # debug inside the build image
+make CONTAINER_RUNTIME=docker package # force a runtime
+```
+
+`make clean` removes both `target/` and the RPM tree.
+
+To install without RPM or a container:
 
 ```sh
 sudo make install            # to /usr

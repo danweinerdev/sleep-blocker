@@ -15,6 +15,10 @@
 %global __brp_strip %{nil}
 %global __brp_strip_static_archive %{nil}
 
+# The staged tarball already contains a binary built for a specific
+# architecture, which is not necessarily the build host's. `make package` passes
+# `--target` so rpmbuild tags the package correctly; without it an aarch64
+# binary would be packaged and labelled x86_64.
 Name:           sleep-block
 Version:        0.1.0
 Release:        1%{?dist}

@@ -1,13 +1,14 @@
 # Build, test and package sleep-block.
 #
-#   make            # release build
+#   make            # native release build
 #   make test       # run the test suite
-#   make package    # build + test + produce a binary RPM
+#   make package    # containerized dual-architecture RPM build
 #   make install    # install into DESTDIR/PREFIX without RPM
 #
-# `package` produces a *binary* RPM: the compile happens here, with whatever
-# toolchain is on PATH, and rpmbuild only stages the finished artefacts. That
-# keeps a rustup toolchain usable, which a source RPM's BuildRequires would not.
+# `package` produces *binary* RPMs: the compile happens in a build container and
+# rpmbuild only stages the finished artefacts. That avoids a source RPM's
+# BuildRequires on rust, which cannot see a rustup toolchain, and makes the
+# build independent of what is installed on the host.
 
 NAME    := sleep-block
 VERSION := $(shell sed -n 's/^version *= *"\(.*\)"/\1/p' Cargo.toml | head -1)
@@ -29,7 +30,36 @@ RPM_TOPDIR ?= $(CURDIR)/tmp/rpmbuild
 SPEC       := dist/rpm/$(NAME).spec
 STAGE      := target/package/$(NAME)-$(VERSION)
 
-.PHONY: all build test check clean install uninstall package srpm icons help
+# --- Architectures -----------------------------------------------------------
+#
+# Native is whatever this machine is; foreign is the other one. Only the native
+# build can run its tests, since a cross-built binary will not execute here.
+HOST_ARCH  := $(shell uname -m)
+ifeq ($(HOST_ARCH),aarch64)
+  NATIVE_ARCH   := aarch64
+  FOREIGN_ARCH  := x86_64
+  NATIVE_TRIPLE := aarch64-unknown-linux-gnu
+  FOREIGN_TRIPLE:= x86_64-unknown-linux-gnu
+else
+  NATIVE_ARCH   := x86_64
+  FOREIGN_ARCH  := aarch64
+  NATIVE_TRIPLE := x86_64-unknown-linux-gnu
+  FOREIGN_TRIPLE:= aarch64-unknown-linux-gnu
+endif
+
+# --- Container ---------------------------------------------------------------
+#
+# podman is preferred: it runs rootless, so files it writes into the mounted
+# tree stay owned by the invoking user. Docker is accepted as a fallback.
+CONTAINER_RUNTIME ?= $(shell command -v podman 2>/dev/null || command -v docker 2>/dev/null)
+IMAGE             ?= $(NAME)-build:latest
+
+# :Z relabels the mount for SELinux, which Fedora enforces; without it the
+# container cannot read the bind-mounted source at all. Harmless on other hosts.
+MOUNT_FLAG := $(if $(findstring podman,$(CONTAINER_RUNTIME)),:Z,)
+
+.PHONY: all build test check clean install uninstall package \
+        container-image container-shell icons help
 
 all: build
 
@@ -90,13 +120,62 @@ uninstall:
 	rm -f $(ICONDIR)/scalable/apps/$(NAME).svg
 	rm -rf $(DATADIR)/licenses/$(NAME)
 
-# Stage the built artefacts into the layout the spec's %install expects, then
-# hand off to rpmbuild. The tarball carries binaries, not source.
-package: check build
+# Build the toolchain image. The build context is nearly empty (see
+# .containerignore) because the source is bind-mounted at run time instead.
+container-image:
+	@test -n "$(CONTAINER_RUNTIME)" || { echo "error: neither podman nor docker found"; exit 1; }
+	@echo "==> Using $(CONTAINER_RUNTIME)"
+	$(CONTAINER_RUNTIME) build -t $(IMAGE) -f Containerfile .
+
+# `make package` runs the whole pipeline inside the container: build and test
+# the native architecture, cross-build the other, then package both.
+#
+# Only the native binary is tested. A cross-built binary cannot execute here,
+# and the integration tests need a live logind session besides — so the foreign
+# RPM is built from verified *sources* but an unexercised binary. That asymmetry
+# is deliberate and is called out at the end of the run.
+package: container-image
+	mkdir -p $(RPM_TOPDIR)
+	$(CONTAINER_RUNTIME) run --rm \
+	    -v "$(CURDIR)":/src$(MOUNT_FLAG) \
+	    -v "$(RPM_TOPDIR)":/rpmbuild$(MOUNT_FLAG) \
+	    -w /src \
+	    -e RPM_TOPDIR=/rpmbuild \
+	    $(IMAGE) \
+	    make -f Makefile package-in-container
+	@echo
+	@echo "Built:"
+	@find $(RPM_TOPDIR)/RPMS -name '$(NAME)-$(VERSION)*.rpm' | sed 's/^/  /'
+
+# Runs *inside* the container. Not intended to be invoked directly on a host:
+# it assumes the cross toolchain and the mounted /rpmbuild are present.
+.PHONY: package-in-container
+package-in-container:
+	@echo "==> Native ($(NATIVE_ARCH)): build and test"
+	$(MAKE) check
+	@echo "==> Native ($(NATIVE_ARCH)): package"
+	$(MAKE) package-arch ARCH=$(NATIVE_ARCH) TRIPLE=$(NATIVE_TRIPLE) NATIVE=1
+	@echo "==> Foreign ($(FOREIGN_ARCH)): cross-build"
+	cargo build --release --target $(FOREIGN_TRIPLE)
+	@echo "==> Foreign ($(FOREIGN_ARCH)): package"
+	$(MAKE) package-arch ARCH=$(FOREIGN_ARCH) TRIPLE=$(FOREIGN_TRIPLE) NATIVE=0
+	@echo
+	@echo "note: only the $(NATIVE_ARCH) binary was tested; the $(FOREIGN_ARCH)"
+	@echo "      binary is cross-built and unexercised."
+
+# Stage one architecture's artefacts into the layout the spec's %install
+# expects, then hand off to rpmbuild. The tarball carries binaries, not source.
+#
+# ARCH, TRIPLE and NATIVE are supplied by the caller.
+.PHONY: package-arch
+package-arch:
 	@command -v rpmbuild >/dev/null || { echo "error: rpmbuild not found (dnf install rpm-build)"; exit 1; }
+	@test -n "$(ARCH)" -a -n "$(TRIPLE)" || { echo "error: package-arch needs ARCH and TRIPLE"; exit 1; }
 	rm -rf target/package
 	mkdir -p $(STAGE)/icons
-	install -pm0755 $(BIN)                  $(STAGE)/$(NAME)
+	@# A native build lands in target/release; a cross build in target/<triple>/release.
+	install -pm0755 $(if $(filter 1,$(NATIVE)),target/release/$(NAME),target/$(TRIPLE)/release/$(NAME)) \
+	                                        $(STAGE)/$(NAME)
 	install -pm0644 dist/$(NAME).desktop    $(STAGE)/$(NAME).desktop
 	install -pm0644 dist/icons/*.png        $(STAGE)/icons/
 	install -pm0644 dist/icons/*.svg        $(STAGE)/icons/
@@ -107,19 +186,27 @@ package: check build
 	mkdir -p $(RPM_TOPDIR)/BUILD $(RPM_TOPDIR)/BUILDROOT $(RPM_TOPDIR)/RPMS \
 	         $(RPM_TOPDIR)/SOURCES $(RPM_TOPDIR)/SPECS $(RPM_TOPDIR)/SRPMS
 	tar -C target/package -czf $(RPM_TOPDIR)/SOURCES/$(NAME)-$(VERSION).tar.gz $(NAME)-$(VERSION)
-	rpmbuild -bb --define '_topdir $(RPM_TOPDIR)' $(SPEC)
-	@echo
-	@echo "Built:"
-	@find $(RPM_TOPDIR)/RPMS -name '$(NAME)-$(VERSION)*.rpm' | sed 's/^/  /'
+	@# --target is what makes rpmbuild tag the package with ARCH rather than
+	@# inferring it from the build host, which would mislabel the cross build.
+	rpmbuild -bb --target $(ARCH) --define '_topdir $(RPM_TOPDIR)' $(SPEC)
+
+# Drop into the build container for debugging.
+container-shell: container-image
+	$(CONTAINER_RUNTIME) run --rm -it \
+	    -v "$(CURDIR)":/src$(MOUNT_FLAG) -w /src $(IMAGE) /bin/bash
 
 clean:
 	cargo clean
 	rm -rf target/package $(RPM_TOPDIR)
 
 help:
-	@echo "make build     - release build"
-	@echo "make test      - run tests"
-	@echo "make check     - tests + clippy + fmt + desktop file validation"
-	@echo "make package   - build, test, and produce a binary RPM"
-	@echo "make install   - install to PREFIX (default /usr), honours DESTDIR"
-	@echo "make icons     - regenerate PNG icons from SVG (needs ImageMagick)"
+	@echo "make build           - native release build"
+	@echo "make test            - run tests (native only)"
+	@echo "make check           - tests + clippy + fmt + desktop file validation"
+	@echo "make package         - containerized: build+test native, cross-build"
+	@echo "                       the other arch, package both as RPMs"
+	@echo "make container-image - build the toolchain image only"
+	@echo "make container-shell - shell into the build container"
+	@echo "make install         - install to PREFIX (default /usr), honours DESTDIR"
+	@echo "make icons           - regenerate PNG icons from SVG (needs ImageMagick)"
+	@echo "make clean           - remove build output and the RPM tree"
