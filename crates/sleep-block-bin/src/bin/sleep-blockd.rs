@@ -43,28 +43,32 @@ impl Service {
     async fn toggle(
         &self,
         #[zbus(signal_emitter)] emitter: zbus::object_server::SignalEmitter<'_>,
-    ) -> (bool, bool) {
+    ) -> zbus::fdo::Result<(bool, bool)> {
         let result = self.state.toggle();
-        if let Err(e) = &result {
-            eprintln!("toggle failed: {e}");
-        }
-        let s = result.unwrap_or_else(|_| self.state.snapshot());
+        // Announce before returning either way: a failure can still have moved
+        // state (a screen-lock failure leaves sleep blocking held), and the
+        // window must see that even though the call reports an error.
         self.announce(&emitter).await;
-        (s.sleep_blocked, s.screen_blocked)
+        match result {
+            Ok(s) => Ok((s.sleep_blocked, s.screen_blocked)),
+            // Propagated rather than logged: the window is a separate process
+            // now, so the daemon's stderr is not somewhere the user will look.
+            // Swallowing it here is what left the toggle silently doing nothing.
+            Err(e) => Err(zbus::fdo::Error::Failed(e.to_string())),
+        }
     }
 
     async fn set_keep_screen_awake(
         &self,
         wanted: bool,
         #[zbus(signal_emitter)] emitter: zbus::object_server::SignalEmitter<'_>,
-    ) -> (bool, bool) {
+    ) -> zbus::fdo::Result<(bool, bool)> {
         let result = self.state.set_keep_screen_awake(wanted);
-        if let Err(e) = &result {
-            eprintln!("screen lock change failed: {e}");
-        }
-        let s = result.unwrap_or_else(|_| self.state.snapshot());
         self.announce(&emitter).await;
-        (s.sleep_blocked, s.screen_blocked)
+        match result {
+            Ok(s) => Ok((s.sleep_blocked, s.screen_blocked)),
+            Err(e) => Err(zbus::fdo::Error::Failed(e.to_string())),
+        }
     }
 
     fn quit(&self) {
@@ -133,8 +137,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let done = service.done.listen();
 
-    // Requesting the name is also the single-instance check: if another daemon
-    // holds it, this build fails here rather than racing it for the tray icon.
+    // The tray starts *before* the bus name is claimed, so `has_tray` is
+    // settled before any client can observe it. The other order looks natural
+    // but races: ksni's spawn() is a multi-round-trip registration with the
+    // StatusNotifierWatcher, and a client polling every 50ms can see the
+    // interface exported and read `has_tray` as false while that is still in
+    // flight — permanently greying out the window's hide-on-close option.
+    //
+    // The cost is that a losing daemon briefly registers a tray icon. That is
+    // the better trade: it disappears when this process exits moments later,
+    // whereas the race leaves a window wrong for its entire lifetime.
+    let tray = SleepTray::start(state.clone());
+    has_tray.store(tray.is_some(), std::sync::atomic::Ordering::Relaxed);
+    let _tray = tray;
+
     let connection = zbus::blocking::connection::Builder::session()?
         .serve_at(OBJECT_PATH, service)?
         .build()?;
@@ -156,11 +172,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => return Err(e.into()),
     }
 
-    // The tray lives here rather than in the GUI so it survives the window
-    // closing — the entire point of the split.
-    let tray = SleepTray::start(state.clone());
-    has_tray.store(tray.is_some(), std::sync::atomic::Ordering::Relaxed);
-    let _tray = tray;
     // Keep the connection alive for the daemon's lifetime; dropping it would
     // release the bus name and unexport the interface.
     let _connection = connection;

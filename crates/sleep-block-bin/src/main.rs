@@ -165,9 +165,13 @@ impl App {
 }
 
 impl eframe::App for App {
-    /// Runs every frame *and* while the window is hidden, which is what makes
-    /// hide-to-tray work: no egui pass happens when the window is not shown, so
-    /// anything here is the only code still running.
+    /// Runs before the UI on every frame, and is where this process decides
+    /// whether to keep existing.
+    ///
+    /// Nothing is ever hidden: a Wayland window cannot hide itself, so closing
+    /// exits the process outright. Whether that also stops the application
+    /// depends on `keep_running_in_tray` — if set, the daemon survives and the
+    /// tray can start a fresh window later.
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // The daemon owns everything this window controls, so without it the
         // GUI is inert: every control would be a request to a process that is

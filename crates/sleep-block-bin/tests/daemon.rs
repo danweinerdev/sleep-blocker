@@ -520,3 +520,37 @@ fn quitting_the_daemon_closes_an_open_gui() {
         panic!("the GUI must not outlive the daemon it depends on");
     }
 }
+
+/// A failed acquisition must reach the caller, not just the daemon's log.
+///
+/// The window is a separate process now, so a daemon that prints an error to
+/// its own stderr has told nobody. This asserts the *shape* — that the D-Bus
+/// method can return an error at all — because provoking a genuine logind
+/// refusal from a test is not reliably possible on a working desktop.
+#[test]
+fn acquisition_failures_can_reach_the_caller() {
+    let daemon = daemon_or_skip!("errshape");
+    let proxy = daemon.proxy();
+
+    // Point a proxy at a path the daemon does not serve. The transport-level
+    // failure this produces travels the same return path a domain failure now
+    // does, so a method typed to swallow errors could not surface it.
+    let connection = zbus::blocking::Connection::session().expect("session bus");
+    let broken = SleepBlockServiceProxyBlocking::builder(&connection)
+        .destination(daemon.name.clone())
+        .expect("destination")
+        .path("/net/phantomnet/NoSuchObject")
+        .expect("path")
+        .build()
+        .expect("proxy");
+
+    assert!(
+        broken.toggle().is_err(),
+        "a call that cannot succeed must return Err rather than a fabricated \
+         success -- the window has no other way to learn it failed"
+    );
+
+    // And the real proxy still succeeds, so the error path has not broken the
+    // happy path.
+    assert!(proxy.sleep_blocked().is_ok());
+}

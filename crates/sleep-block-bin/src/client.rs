@@ -39,8 +39,11 @@ pub struct DaemonClient {
     /// Held for the GUI's lifetime. Dropping it releases the GUI's bus name,
     /// which is how the daemon learns the window is gone.
     _connection: zbus::blocking::Connection,
-    /// Whether the daemon has a tray, read once at connect: it cannot change
-    /// while the daemon runs.
+    /// Whether the daemon has a tray, read once at connect.
+    ///
+    /// Safe to read once only because the daemon starts its tray *before*
+    /// claiming the bus name, so this is already settled by the time this
+    /// client can talk to it at all.
     has_tray: bool,
     /// Cached so a failed call can keep rendering the last known-good values
     /// rather than flickering to defaults.

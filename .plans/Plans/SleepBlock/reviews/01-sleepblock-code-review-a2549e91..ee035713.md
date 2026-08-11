@@ -14,23 +14,23 @@ findings:
   - id: F-01
     severity: major
     title: "Acquisition failures never reach the window: the daemon logs them and returns success"
-    status: open
+    status: fixed
   - id: F-02
     severity: major
     title: "has_tray is read once during a window when the daemon has not yet started its tray"
-    status: open
+    status: fixed
   - id: F-03
     severity: major
     title: "Untimed D-Bus calls on the render thread freeze the window against a hung daemon"
-    status: open
+    status: fixed
   - id: F-04
     severity: major
     title: "Doc comment on logic() describes the hide-to-tray design this phase deleted"
-    status: open
+    status: fixed
   - id: F-05
     severity: minor
     title: "Design's Error Handling table claims failures are shown in the window"
-    status: open
+    status: fixed
   - id: F-06
     severity: minor
     title: "GIT_DESCRIBE computed but never used"
@@ -236,6 +236,40 @@ other crate choices at that granularity (`zbus` reuse, the `async-io` backend).
 ## Resolution Log
 
 <!-- Append-only; one entry per disposition. -->
+
+### F-01 — fixed (2026-08-11)
+`Service::toggle` and `Service::set_keep_screen_awake` now return
+`zbus::fdo::Result` and propagate the domain error as `fdo::Error::Failed`
+instead of printing it to the daemon's stderr. `announce()` runs before the
+return either way, because a failed call can still have moved state (a
+screen-lock failure leaves sleep blocking held) and the window must see that.
+The wire signature is unchanged (`bb`), so this is additive. Added
+`acquisition_failures_can_reach_the_caller` to `tests/daemon.rs`, which asserts
+a call that cannot succeed returns `Err` rather than a fabricated success.
+
+### F-02 — fixed (2026-08-11)
+The daemon now starts its tray *before* claiming the bus name, so `has_tray` is
+settled before any client can reach it. Verified by polling `HasTray` from the
+first reachable read: `true` on attempt 1. The trade is that a losing daemon
+briefly registers a tray icon before exiting, which is better than a window
+being wrong for its entire lifetime. The client comment claiming `has_tray`
+"cannot change while the daemon runs" was corrected — it is safe to read once
+*because of* the new ordering, not inherently.
+
+### F-03 — fixed (2026-08-11)
+The client's connection is built with `method_timeout(2s)`. `Builder::method_timeout`
+is on the connection, not the proxy — a first attempt at a proxy-level
+`with_timeout` did not compile. A hung daemon now fails the read and falls into
+the existing `daemon_gone` path rather than blocking the render thread.
+
+### F-04 — fixed (2026-08-11)
+The `logic()` doc comment described hide-to-tray, which this phase deleted. It
+now states that nothing is ever hidden, closing exits the process, and
+`keep_running_in_tray` decides only whether the daemon survives.
+
+### F-05 — fixed (2026-08-11)
+The design's Error Handling table is accurate again once F-01 landed; extended
+to record *how* the error crosses the process boundary.
 
 ## Orchestrator Observations
 

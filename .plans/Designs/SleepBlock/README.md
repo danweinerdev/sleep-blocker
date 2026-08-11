@@ -368,7 +368,7 @@ Failures are surfaced, never swallowed, and never leave a partial transition
 
 | Condition | Handling |
 |---|---|
-| System bus or logind unreachable | `Error::Connect`; state unchanged; message shown in the window and the tray tooltip. |
+| System bus or logind unreachable | `Error::Connect`; state unchanged; message shown in the window and the tray tooltip. The daemon returns it as an `fdo::Error` rather than logging it — with the window in another process, the daemon's stderr is not somewhere the user looks. |
 | logind refuses the inhibit | `Error::Inhibit`; state unchanged. |
 | ScreenSaver acquire fails | Sleep blocking is **retained**; the preference is reset and the error reported (**FR-12**). Losing the secondary lock is not a reason to allow suspend. |
 | No StatusNotifierItem host | Logged; the app runs with the window alone (**FR-13**). |
