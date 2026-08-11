@@ -32,6 +32,34 @@ RPM_TOPDIR ?= $(CURDIR)/tmp/rpmbuild
 # not re-download the dependency tree. Kept out of the image because a cache
 # baked into a layer is invalidated by every rebuild.
 CARGO_CACHE ?= $(CURDIR)/tmp/cargo
+
+# --- RPM Release ---------------------------------------------------------
+#
+# `Release` distinguishes packages built from the *same* upstream version. A
+# tagged release is `1`; anything after that tag is a snapshot and gets
+# `1.<commits>.git<sha>`, following Fedora's convention for untagged builds
+# (e.g. 0.61.20260213git6067afd.fc44).
+#
+# This matters practically: without it every rebuild produced the identical
+# NEVRA, so dnf saw no difference and refused to upgrade — which looked exactly
+# like "the package isn't updating". The snapshot suffix also sorts above the
+# plain `1`, so a development build supersedes the release it came from.
+#
+# A dirty tree appends `.dirty` so an uncommitted build is never mistaken for
+# a reproducible one.
+GIT_DESCRIBE := $(shell git describe --tags --long --always --dirty 2>/dev/null)
+COMMITS_SINCE_TAG := $(shell git describe --tags --long 2>/dev/null | sed -n 's/.*-\([0-9]\+\)-g[0-9a-f]\+$$/\1/p')
+GIT_SHA := $(shell git rev-parse --short HEAD 2>/dev/null)
+GIT_DIRTY := $(shell git status --porcelain 2>/dev/null | grep -qv '^??' && echo .dirty)
+
+ifeq ($(COMMITS_SINCE_TAG),0)
+  RPM_RELEASE ?= 1$(GIT_DIRTY)
+else ifeq ($(COMMITS_SINCE_TAG),)
+  # No tag reachable at all: still distinguish builds by sha.
+  RPM_RELEASE ?= 0.git$(GIT_SHA)$(GIT_DIRTY)
+else
+  RPM_RELEASE ?= 1.$(COMMITS_SINCE_TAG).git$(GIT_SHA)$(GIT_DIRTY)
+endif
 SPEC       := dist/rpm/$(NAME).spec
 STAGE      := target/package/$(NAME)-$(VERSION)
 
@@ -152,6 +180,7 @@ package: container-image
 	    -w /src \
 	    -e RPM_TOPDIR=/rpmbuild \
 	    -e CARGO_HOME=/cargo \
+	    -e RPM_RELEASE='$(RPM_RELEASE)' \
 	    $(IMAGE) \
 	    make -f Makefile package-in-container
 	@echo
@@ -203,6 +232,7 @@ package-arch:
 	rpmbuild -bb --target $(ARCH) \
 	    --define '_topdir $(RPM_TOPDIR)' \
 	    --define 'version $(VERSION)' \
+	    --define 'release $(RPM_RELEASE)' \
 	    $(SPEC)
 
 # --- Versioning --------------------------------------------------------------
@@ -223,6 +253,12 @@ bump-patch:
 
 version:
 	@echo $(VERSION)
+
+# The full NEVRA-ish identity this build would produce, for eyeballing before
+# a package run.
+.PHONY: release-id
+release-id:
+	@echo "$(NAME)-$(VERSION)-$(RPM_RELEASE)"
 
 # Drop into the build container for debugging.
 container-shell: container-image

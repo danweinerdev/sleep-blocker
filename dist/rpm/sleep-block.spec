@@ -25,9 +25,15 @@
 # mismatched package is easy to spot.
 %{!?version: %global version 0.0.0}
 
+# Release likewise comes from the Makefile, which derives it from git: `1` for a
+# tagged release, `1.<commits>.git<sha>` for anything after the tag. Without a
+# distinct Release, two different builds of the same version share a NEVRA and
+# dnf treats them as the same package.
+%{!?release: %global release 1}
+
 Name:           sleep-block
 Version:        %{version}
-Release:        1%{?dist}
+Release:        %{release}%{?dist}
 Summary:        GUI toggle that stops the system from sleeping
 
 License:        MIT
