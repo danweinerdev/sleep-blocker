@@ -28,3 +28,6 @@ ksni = { version = "0.3.6", default-features = false, features = ["blocking", "a
 png = "0.18.1"
 zbus.workspace = true
 event-listener = "5"
+
+[dev-dependencies]
+libc = "0.2.189"

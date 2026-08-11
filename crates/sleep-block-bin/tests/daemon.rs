@@ -194,6 +194,17 @@ fn property_reads_track_state_through_a_cached_proxy() {
 
 /// Polls a condition briefly. Property updates arrive via a signal, so a bare
 /// read immediately after a method call can legitimately race it.
+fn wait_for_secs(secs: u64, mut cond: impl FnMut() -> bool) -> bool {
+    let deadline = Instant::now() + Duration::from_secs(secs);
+    while Instant::now() < deadline {
+        if cond() {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    false
+}
+
 fn wait_for(mut cond: impl FnMut() -> bool) -> bool {
     let deadline = Instant::now() + Duration::from_secs(2);
     while Instant::now() < deadline {
@@ -590,5 +601,57 @@ fn a_crashed_daemon_also_closes_an_open_gui() {
         let _ = gui.kill();
         let _ = gui.wait();
         panic!("the GUI must not outlive a crashed daemon either");
+    }
+}
+
+/// A daemon that is alive but never answers must not freeze the window.
+///
+/// This is the case `daemon_gone` alone cannot catch: the process still exists
+/// and still owns its bus name, so nothing errors — the calls simply never
+/// return. Without a bounded timeout the window's render thread blocks
+/// indefinitely, close button included.
+///
+/// SIGSTOP is the cleanest way to produce it: the daemon is frozen mid-flight
+/// rather than killed, exactly like one stuck inside its own logind round trip.
+#[test]
+fn a_stopped_daemon_does_not_hang_the_window() {
+    let daemon = daemon_or_skip!("stopped");
+
+    let mut gui = match daemon.spawn_gui() {
+        Ok(c) => c,
+        Err(_) => {
+            eprintln!("SKIP: could not launch the GUI");
+            return;
+        }
+    };
+    if !wait_for(|| daemon.gui_running()) {
+        let _ = gui.kill();
+        let _ = gui.wait();
+        eprintln!("SKIP: the GUI did not start (no display?)");
+        return;
+    }
+
+    // Freeze rather than kill: the bus name stays owned, so every call hangs
+    // instead of failing.
+    let pid = daemon.child.id() as i32;
+    unsafe {
+        libc::kill(pid, libc::SIGSTOP);
+    }
+
+    let closed = wait_for_secs(20, || gui.try_wait().ok().flatten().is_some());
+
+    // Let the daemon die properly whatever happened, so the test never leaves a
+    // stopped process behind.
+    unsafe {
+        libc::kill(pid, libc::SIGCONT);
+    }
+
+    if !closed {
+        let _ = gui.kill();
+        let _ = gui.wait();
+        panic!(
+            "the window must give up on an unresponsive daemon rather than \
+             block its render thread forever"
+        );
     }
 }

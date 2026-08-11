@@ -211,17 +211,29 @@ fn setter_return_values_agree_with_a_later_snapshot() {
         "a setter's return value must match what the next reader sees"
     );
 
-    let returned = state.set_keep_running_in_tray(true);
-    let observed = state.snapshot();
-    assert_eq!(
-        returned.keep_running_in_tray, observed.keep_running_in_tray,
-        "the same must hold for the tray preference"
-    );
-
     // And the reverse direction, which is the case the user hit.
     let returned = state
         .set_keep_screen_awake(false)
         .expect("unsetting should succeed");
     assert!(!returned.keep_screen_awake);
     assert!(!state.snapshot().keep_screen_awake);
+}
+
+/// Split out from the screen-lock case deliberately: this touches no inhibitor
+/// and needs no ScreenSaver provider, so gating it behind one would silently
+/// drop the coverage on any machine without a screen locker.
+#[test]
+fn tray_preference_setter_agrees_with_a_later_snapshot() {
+    let state = SleepBlock::new();
+
+    let returned = state.set_keep_running_in_tray(true);
+    assert_eq!(
+        returned.keep_running_in_tray,
+        state.snapshot().keep_running_in_tray,
+        "a setter's return value must match what the next reader sees"
+    );
+
+    let returned = state.set_keep_running_in_tray(false);
+    assert!(!returned.keep_running_in_tray);
+    assert!(!state.snapshot().keep_running_in_tray);
 }

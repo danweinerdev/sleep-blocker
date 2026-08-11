@@ -53,16 +53,27 @@ pub struct DaemonClient {
 }
 
 impl DaemonClient {
-    /// Connects to a running daemon, starting one if necessary.
+    /// Connects to a running daemon, starting one if necessary, and claims the
+    /// GUI's well-known name so only one window runs.
     ///
-    /// Launching the daemon here means the GUI can be started directly (from a
-    /// launcher or the command line) without the user knowing a daemon exists.
-    /// Connects to a daemon, claiming the GUI name so only one window runs.
+    /// Launching the daemon here means the window can be started directly, from
+    /// a launcher or the command line, without the user knowing a daemon
+    /// exists.
     ///
-    /// Returns `Err(AlreadyRunning)` when another GUI holds the name — the
-    /// caller should exit quietly rather than opening a second window.
+    /// Returns `Err(AlreadyRunning)` when another window holds the name — the
+    /// caller should exit quietly rather than opening a second one.
     pub fn connect() -> Result<Self, ConnectError> {
-        let connection = zbus::blocking::Connection::session().map_err(ConnectError::Bus)?;
+        // Bounded so a hung daemon cannot freeze the window. These calls run on
+        // the render thread once per frame; without a limit a daemon that is
+        // alive but blocked — stuck in its own logind round trip while holding
+        // the state mutex, say — would hang the UI indefinitely, close button
+        // included, and never reach the daemon-gone handling. Two seconds is far
+        // longer than local IPC needs and short enough to stay a blip.
+        let connection = zbus::blocking::connection::Builder::session()
+            .map_err(ConnectError::Bus)?
+            .method_timeout(std::time::Duration::from_secs(2))
+            .build()
+            .map_err(ConnectError::Bus)?;
 
         // Claiming this is what stops "Show window" stacking up windows: the
         // daemon checks the name first, and a GUI that loses the race exits.

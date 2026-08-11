@@ -49,6 +49,18 @@ tasks:
     verification: "Tray Quit and the GUI's Quit button each stop both processes and release all locks; measured GUI exit latency 104ms. Serves FR-20."
     justifies: "Delivers FR-20 and satisfies AC-29. Quit from the tray left an orphaned window whose every control failed silently."
     depends_on: ["5.6"]
+  - id: "5.8"
+    title: "Log PropertiesChanged emission failures"
+    status: planned
+    verification: "A failed property emission leaves a line in the daemon's log rather than only a slightly-late indicator. Serves NFR-08."
+    justifies: "Carries review finding F-16. Announce currently discards all four emission results, so a stuck-looking indicator has no trail to grep -- the polling fallback hides the failure rather than reporting it."
+    depends_on: ["5.7"]
+  - id: "5.9"
+    title: "Give AC-33 an evidence row in this phase"
+    status: planned
+    verification: "A Completion Evidence row in this phase runs make package, or the phase records that AC-33's container half was verified in phase 4 and only release supersession is new here."
+    justifies: "Carries review finding F-17. AC-33 is checked off with no make package run evidenced in this phase; its container and multi-arch half was inherited from phase 4."
+    depends_on: ["5.7"]
 ---
 
 # Phase 5: Daemon Split and State Synchronisation
@@ -301,6 +313,31 @@ nothing.
 |---|---|---|---|
 | tray Quit with a GUI open | . | PASS (exit 0) | both processes gone; 0 locks held; GUI exited in 104ms |
 | `cargo test --release` | . | PASS (exit 0) | 39 passed |
+
+## 5.8: Log PropertiesChanged emission failures
+
+### Subtasks
+- [ ] Report a failed emission rather than discarding the result
+
+### Notes
+Revision boundary: an emission failure is observable in the daemon's log.
+
+### Completion Evidence
+
+Pending — not complete.
+
+## 5.9: Give AC-33 an evidence row in this phase
+
+### Subtasks
+- [ ] Either run `make package` as phase evidence, or record the split with phase 4
+
+### Notes
+Revision boundary: AC-33's checked state is backed by evidence in the phase that
+claims it.
+
+### Completion Evidence
+
+Pending — not complete.
 
 ## Acceptance Criteria
 - [x] **AC-24**: The daemon exports its interface and every rendered property is readable.

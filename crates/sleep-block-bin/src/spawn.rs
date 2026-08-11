@@ -50,15 +50,23 @@ impl GuiPresence {
                 return;
             };
 
-            // Seed from the current state: the GUI may already be running, and
-            // signals only report changes from here on.
-            if let Ok(name) = gui_bus_name.as_str().try_into() {
-                presence.set(dbus.name_has_owner(name).unwrap_or(false));
-            }
-
+            // Subscribe *before* seeding. `receive_name_owner_changed` is what
+            // registers the match rule, so anything between a seed read and
+            // that call is simply not being listened for and the bus drops it.
+            // A missed acquisition or release leaves this flag stuck for the
+            // daemon's lifetime -- "Show window" would become a permanent
+            // no-op -- so the subscribe-then-catch-up order is load-bearing,
+            // not stylistic.
             let Ok(mut changes) = dbus.receive_name_owner_changed() else {
                 return;
             };
+
+            // Now catch up on what was true before the subscription existed.
+            // Any signal that arrived in between is still queued on `changes`,
+            // so it is applied immediately after this.
+            if let Ok(name) = gui_bus_name.as_str().try_into() {
+                presence.set(dbus.name_has_owner(name).unwrap_or(false));
+            }
             for change in &mut changes {
                 let Ok(args) = change.args() else { continue };
                 if args.name().as_str() != gui_bus_name {

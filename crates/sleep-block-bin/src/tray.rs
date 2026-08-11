@@ -1,8 +1,9 @@
 //! StatusNotifierItem tray integration.
 //!
-//! The tray runs on its own thread inside `ksni`, so it shares state with the
-//! window through a [`SleepBlock`] handle rather than owning any locks itself.
-//! Both surfaces are equal peers: a toggle from either is visible in the other.
+//! The tray lives inside the daemon and holds the daemon's own [`SleepBlock`]
+//! handle — so unlike the window, it reaches the inhibitors directly rather
+//! than over D-Bus. The window is a separate process; the two stay in step
+//! because both read the same daemon state, not because they share memory.
 
 use ksni::{
     Icon, MenuItem, Tray,

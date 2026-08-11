@@ -99,8 +99,10 @@ fn main() -> eframe::Result {
 }
 
 struct App {
-    /// Shared with the tray. The locks live here, not in the GUI, so both
-    /// surfaces read and write the same state.
+    /// Connection to the daemon. Holds no inhibitors: every control in this
+    /// window is a request to the daemon, which owns the locks and the tray.
+    /// That is the whole point of the split — closing this window releases
+    /// nothing.
     client: DaemonClient,
     /// Set when an action fails, so the user sees why nothing happened.
     error: Option<String>,

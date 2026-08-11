@@ -155,14 +155,15 @@ features:
 
 ### Interfaces
 
-`sleep-block-core` exposes four public items:
+`sleep-block-core` exposes four types plus the IPC contract:
 
 | Item | Role |
 |---|---|
 | `Inhibitor` | Holds a sleep lock. Releases on drop by closing its descriptor. |
 | `ScreenInhibitor` | Holds a screen-lock cookie. Releases on drop via `UnInhibit`. |
-| `SleepBlock` | Cloneable handle to shared state. `toggle`, `set_keep_screen_awake`, `snapshot`, `release_all`. |
-| `Status` | Plain copyable snapshot: `sleep_blocked`, `screen_blocked`, `keep_screen_awake`. |
+| `SleepBlock` | Cloneable handle to the state. `toggle`, `set_keep_screen_awake`, `set_keep_running_in_tray`, `snapshot`, `release_all`. |
+| `Status` | Plain copyable snapshot: `sleep_blocked`, `screen_blocked`, `keep_screen_awake`, `keep_running_in_tray`. |
+| `ipc` | The D-Bus contract both binaries share: the bus and object names, and the client proxy. Lives here so neither binary can drift from the other's idea of the interface. |
 
 `snapshot` returns `Status` **by value** so no lock is held across a repaint
 (**NFR-06**). Exposing the guard would have made that mistake easy to make.

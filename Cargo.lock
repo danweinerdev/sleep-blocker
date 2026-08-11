@@ -2290,6 +2290,7 @@ dependencies = [
  "eframe",
  "event-listener",
  "ksni",
+ "libc",
  "png",
  "sleep-block-core",
  "zbus",
