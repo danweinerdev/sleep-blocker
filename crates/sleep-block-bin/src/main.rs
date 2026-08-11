@@ -107,7 +107,7 @@ struct App {
     /// Set when an action fails, so the user sees why nothing happened.
     error: Option<String>,
     /// Set by the in-window Quit button. Without it the close command that
-    /// button sends would be caught by the hide-on-close handler and turned
+    /// button sends would be caught by the keep-running-in-tray handler and turned
     /// into another hide, making the button do nothing.
     quitting: bool,
 }
@@ -185,7 +185,7 @@ impl eframe::App for App {
         }
 
         // The daemon owns every lock, so closing this window releases nothing.
-        // With hide-on-close enabled the window simply goes away and the daemon
+        // With keep-running-in-tray enabled the window simply goes away and the daemon
         // keeps running; the tray's "Show window" starts a fresh GUI. That is
         // what makes this work on Wayland, where a window cannot hide itself.
         //
@@ -295,7 +295,7 @@ impl eframe::App for App {
                     status = self.client.cached();
                 }
 
-                // With hide-on-close enabled, the window's close button no
+                // With keep-running-in-tray enabled, the window's close button no
                 // longer quits, so the window needs its own way out. Relying on
                 // the tray menu alone strands the user if the tray icon is not
                 // visible for any reason.

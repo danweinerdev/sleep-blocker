@@ -114,6 +114,8 @@ what makes the rest verifiable at all.
 - `zbus` for the D-Bus contract between the daemon and the window, and
   `event-listener` for the daemon's shutdown signal — a one-shot notification
   that avoids polling or a channel for a single wakeup.
+- `libc` (dev-dependency only) for `SIGSTOP`/`SIGCONT` in the test that proves a
+  hung daemon cannot freeze the window.
 
 ## Plan Completion Evidence
 

@@ -49,8 +49,10 @@ pub trait SleepBlockService {
     /// Sets whether the screen should also be kept awake.
     fn set_keep_screen_awake(&self, wanted: bool) -> zbus::Result<(bool, bool)>;
 
-    /// Releases every lock and exits the daemon. Used by the tray's Quit item
-    /// and by the GUI's Quit button.
+    /// Releases every lock and exits the daemon. Used by the GUI's Quit button.
+    /// The tray's Quit item ends the daemon directly instead — it runs inside
+    /// the daemon, so it signals the shutdown event rather than calling itself
+    /// over the bus.
     fn quit(&self) -> zbus::Result<()>;
 
     /// True while system sleep is blocked.
@@ -66,8 +68,8 @@ pub trait SleepBlockService {
     fn keep_screen_awake(&self) -> zbus::Result<bool>;
 
     /// Whether the daemon actually has a tray icon. Without one there would be
-    /// no way to bring the window back, so the GUI greys out the hide-on-close
-    /// option rather than offering a trap.
+    /// no way to bring the window back, so the GUI greys out the
+    /// keep-running-in-tray option rather than offering a trap.
     #[zbus(property)]
     fn has_tray(&self) -> zbus::Result<bool>;
 

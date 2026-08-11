@@ -24,12 +24,12 @@ use sleep_block_app::{GuiPresence, tray::SleepTray};
 struct Service {
     state: SleepBlock,
     /// Whether a tray icon was obtained. The GUI needs this: without a tray,
-    /// hide-on-close would leave no way to get the window back.
+    /// keeping the daemon alive on close would leave no way to get the window back.
     has_tray: std::sync::Arc<std::sync::atomic::AtomicBool>,
     /// Set when the daemon should exit; the main thread waits on this rather
     /// than calling `exit` from inside a D-Bus handler, so locks unwind
     /// normally.
-    done: event_listener::Event,
+    done: std::sync::Arc<event_listener::Event>,
 }
 
 #[zbus::interface(name = "net.phantomnet.SleepBlock1")]
@@ -129,11 +129,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let state = SleepBlock::new();
 
+    // One event, shared by the D-Bus quit method and the tray's Quit item, so
+    // both end the daemon the same way.
+    let done_event = std::sync::Arc::new(event_listener::Event::new());
     let has_tray = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let service = Service {
         state: state.clone(),
         has_tray: has_tray.clone(),
-        done: event_listener::Event::new(),
+        done: done_event.clone(),
     };
     let done = service.done.listen();
 
@@ -142,7 +145,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // but races: ksni's spawn() is a multi-round-trip registration with the
     // StatusNotifierWatcher, and a client polling every 50ms can see the
     // interface exported and read `has_tray` as false while that is still in
-    // flight — permanently greying out the window's hide-on-close option.
+    // flight — permanently greying out the window's keep-running-in-tray option.
     //
     // The cost is that a losing daemon briefly registers a tray icon. That is
     // the better trade: it disappears when this process exits moments later,
@@ -153,7 +156,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::env::var("SLEEP_BLOCK_GUI_BUS_NAME")
             .unwrap_or_else(|_| sleep_block_core::ipc::GUI_BUS_NAME.to_string()),
     );
-    let tray = SleepTray::start(state.clone(), gui);
+    let tray = SleepTray::start(state.clone(), gui, done_event.clone());
     has_tray.store(tray.is_some(), std::sync::atomic::Ordering::Relaxed);
     let _tray = tray;
 

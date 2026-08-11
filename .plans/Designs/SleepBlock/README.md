@@ -198,7 +198,7 @@ Where each requirement is realised in this design:
 | **NFR-05** | Release profile: fat LTO, `codegen-units = 1`, symbols stripped. |
 | **NFR-06** | `snapshot` returns `Status` by value; no guard escapes. |
 | **NFR-07** | `make check` gates `make package` on tests, clippy, fmt, and desktop validation. |
-| **NFR-08** | Every mutating method announces all four properties; the window reads uncached besides. |
+| **NFR-08** | `toggle` and `set_keep_screen_awake` announce all four properties, since either can move several at once; `set_keep_running_in_tray` relies on zbus's own setter signal, which suffices because it changes only itself. The window reads uncached besides. |
 | **NFR-09** | `Containerfile` carries both toolchains; `make package` builds native and cross in one run. |
 
 ## Design Decisions

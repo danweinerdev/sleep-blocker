@@ -5,6 +5,9 @@
 //! than over D-Bus. The window is a separate process; the two stay in step
 //! because both read the same daemon state, not because they share memory.
 
+use std::sync::Arc;
+
+use event_listener::Event;
 use ksni::{
     Icon, MenuItem, Tray,
     blocking::TrayMethods,
@@ -28,6 +31,10 @@ const IDLE_PNGS: &[&[u8]] = &[
 
 pub struct SleepTray {
     state: SleepBlock,
+    /// Signalled by the Quit item so the daemon's main thread can unwind
+    /// normally. Notifying is a local wakeup — no I/O — so it is safe from a
+    /// ksni callback, which runs synchronously inside the D-Bus handler.
+    done: Arc<Event>,
     /// Whether a GUI window is open. Read from the menu callback, which ksni
     /// runs synchronously inside its D-Bus handler — so it must not do I/O.
     gui: crate::GuiPresence,
@@ -38,13 +45,14 @@ pub struct SleepTray {
 
 impl SleepTray {
     pub fn new(state: SleepBlock) -> Self {
-        Self::with_presence(state, crate::GuiPresence::new())
+        Self::with_presence(state, crate::GuiPresence::new(), Arc::new(Event::new()))
     }
 
-    pub fn with_presence(state: SleepBlock, gui: crate::GuiPresence) -> Self {
+    pub fn with_presence(state: SleepBlock, gui: crate::GuiPresence, done: Arc<Event>) -> Self {
         Self {
             state,
             gui,
+            done,
             error: None,
         }
     }
@@ -57,8 +65,9 @@ impl SleepTray {
     pub fn start(
         state: SleepBlock,
         gui: crate::GuiPresence,
+        done: Arc<Event>,
     ) -> Option<ksni::blocking::Handle<Self>> {
-        let handle = match Self::with_presence(state.clone(), gui).spawn() {
+        let handle = match Self::with_presence(state.clone(), gui, done).spawn() {
             Ok(handle) => handle,
             Err(e) => {
                 eprintln!("tray unavailable, continuing without it: {e}");
@@ -211,10 +220,15 @@ impl Tray for SleepTray {
                 label: "Quit".into(),
                 icon_name: "application-exit".into(),
                 activate: Box::new(|this: &mut Self| {
-                    // Release before exiting so the locks disappear immediately
-                    // rather than waiting on process teardown.
+                    // Release the locks, then signal the main thread rather than
+                    // calling process::exit here. Exiting from inside this
+                    // callback kills the process mid-flight: a window with an
+                    // in-flight toggle would see a dropped connection instead of
+                    // the error reply the daemon deliberately propagates, which
+                    // is the same "did it fail or did it vanish?" ambiguity the
+                    // graceful path exists to prevent.
                     this.state.release_all();
-                    std::process::exit(0);
+                    this.done.notify(usize::MAX);
                 }),
                 ..Default::default()
             }
@@ -281,7 +295,7 @@ mod tests {
     }
 
     #[test]
-    fn show_window_is_absent_until_hide_on_close_is_enabled() {
+    fn show_window_is_absent_until_keep_running_in_tray_is_enabled() {
         let tray = SleepTray::new(SleepBlock::new());
 
         assert!(
