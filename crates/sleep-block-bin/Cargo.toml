@@ -1,0 +1,18 @@
+[package]
+name = "sleep-block-bin"
+description = "GUI toggle for blocking system sleep"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "sleep-block"
+path = "src/main.rs"
+
+[dependencies]
+sleep-block-core = { path = "../sleep-block-core" }
+eframe = { version = "0.36.1", default-features = false, features = [
+    "default_fonts",
+    "glow",
+    "wayland",
+    "x11",
+] }
