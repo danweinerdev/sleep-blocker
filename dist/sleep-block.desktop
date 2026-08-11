@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Sleep Block
+GenericName=Sleep Inhibitor
+Comment=Keep the system awake by blocking suspend
+# Absolute path or a bare name resolved via PATH; adjust to wherever the binary
+# is installed.
+Exec=sleep-block
+Icon=preferences-system-power-management
+Terminal=false
+Categories=Utility;
+Keywords=sleep;suspend;inhibit;caffeine;awake;insomnia;
+StartupNotify=true
