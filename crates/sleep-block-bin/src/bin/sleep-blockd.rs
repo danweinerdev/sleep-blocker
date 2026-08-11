@@ -18,7 +18,7 @@ use sleep_block_core::{
 };
 
 use event_listener::Listener as _;
-use sleep_block_app::tray::SleepTray;
+use sleep_block_app::{GuiPresence, tray::SleepTray};
 
 /// Serves the D-Bus interface over the shared state.
 struct Service {
@@ -147,7 +147,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // The cost is that a losing daemon briefly registers a tray icon. That is
     // the better trade: it disappears when this process exits moments later,
     // whereas the race leaves a window wrong for its entire lifetime.
-    let tray = SleepTray::start(state.clone());
+    // Watching the GUI's name here keeps the tray callback free of I/O.
+    let gui = GuiPresence::new();
+    gui.watch(
+        std::env::var("SLEEP_BLOCK_GUI_BUS_NAME")
+            .unwrap_or_else(|_| sleep_block_core::ipc::GUI_BUS_NAME.to_string()),
+    );
+    let tray = SleepTray::start(state.clone(), gui);
     has_tray.store(tray.is_some(), std::sync::atomic::Ordering::Relaxed);
     let _tray = tray;
 

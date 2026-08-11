@@ -554,3 +554,41 @@ fn acquisition_failures_can_reach_the_caller() {
     // happy path.
     assert!(proxy.sleep_blocked().is_ok());
 }
+
+/// FR-20 says the window closes when the daemon exits "whether that exit was
+/// requested or a crash". Only the orderly path had a test; this covers the
+/// other half by killing the daemon outright.
+///
+/// The code path should be identical — `snapshot()` marks the daemon gone on
+/// any failed read, and a dead process fails the read the same way a quit one
+/// does — but "should be identical" is exactly the kind of claim worth pinning.
+#[test]
+fn a_crashed_daemon_also_closes_an_open_gui() {
+    let mut daemon = daemon_or_skip!("crash");
+
+    let mut gui = match daemon.spawn_gui() {
+        Ok(c) => c,
+        Err(_) => {
+            eprintln!("SKIP: could not launch the GUI");
+            return;
+        }
+    };
+    if !wait_for(|| daemon.gui_running()) {
+        let _ = gui.kill();
+        let _ = gui.wait();
+        eprintln!("SKIP: the GUI did not start (no display?)");
+        return;
+    }
+
+    // SIGKILL rather than quit(): no chance to release locks, close the
+    // connection, or notify anyone. This is the crash case.
+    let _ = daemon.child.kill();
+    let _ = daemon.child.wait();
+
+    let closed = wait_for(|| gui.try_wait().ok().flatten().is_some());
+    if !closed {
+        let _ = gui.kill();
+        let _ = gui.wait();
+        panic!("the GUI must not outlive a crashed daemon either");
+    }
+}

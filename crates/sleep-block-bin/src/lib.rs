@@ -9,4 +9,4 @@ pub mod client;
 pub mod tray;
 
 mod spawn;
-pub use spawn::spawn_gui;
+pub use spawn::{GuiPresence, spawn_gui};

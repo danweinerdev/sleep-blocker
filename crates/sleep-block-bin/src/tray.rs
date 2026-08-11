@@ -27,6 +27,9 @@ const IDLE_PNGS: &[&[u8]] = &[
 
 pub struct SleepTray {
     state: SleepBlock,
+    /// Whether a GUI window is open. Read from the menu callback, which ksni
+    /// runs synchronously inside its D-Bus handler — so it must not do I/O.
+    gui: crate::GuiPresence,
     /// Set when a toggle from the tray fails, so the tooltip can explain why
     /// nothing happened — the tray has no other way to report an error.
     error: Option<String>,
@@ -34,7 +37,15 @@ pub struct SleepTray {
 
 impl SleepTray {
     pub fn new(state: SleepBlock) -> Self {
-        Self { state, error: None }
+        Self::with_presence(state, crate::GuiPresence::new())
+    }
+
+    pub fn with_presence(state: SleepBlock, gui: crate::GuiPresence) -> Self {
+        Self {
+            state,
+            gui,
+            error: None,
+        }
     }
 
     /// Starts the tray service in the background.
@@ -42,8 +53,11 @@ impl SleepTray {
     /// Returns `None` when no StatusNotifierItem host is available, which is a
     /// normal condition on desktops without a system tray rather than an error:
     /// the window remains fully usable on its own.
-    pub fn start(state: SleepBlock) -> Option<ksni::blocking::Handle<Self>> {
-        let handle = match Self::new(state.clone()).spawn() {
+    pub fn start(
+        state: SleepBlock,
+        gui: crate::GuiPresence,
+    ) -> Option<ksni::blocking::Handle<Self>> {
+        let handle = match Self::with_presence(state.clone(), gui).spawn() {
             Ok(handle) => handle,
             Err(e) => {
                 eprintln!("tray unavailable, continuing without it: {e}");
@@ -136,11 +150,16 @@ impl Tray for SleepTray {
             items.push(
                 StandardItem {
                     label: "Show window".into(),
-                    activate: Box::new(|_this: &mut Self| {
+                    activate: Box::new(|this: &mut Self| {
                         // Launching a fresh GUI *is* showing the window. A
                         // running GUI cannot un-hide itself on Wayland, so the
                         // daemon starts a new one instead.
-                        crate::spawn_gui();
+                        //
+                        // ksni runs this synchronously inside its D-Bus
+                        // handler, so the duplicate check is an atomic load
+                        // rather than a bus round trip; the process spawn
+                        // itself does not wait for the child.
+                        crate::spawn_gui(&this.gui);
                     }),
                     ..Default::default()
                 }

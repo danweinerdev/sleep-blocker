@@ -287,6 +287,33 @@ than Key Decisions: neither was a weighed alternative the way the
 async-io-vs-tokio choice was, so listing them as decisions would overstate the
 deliberation.
 
+### Q1 — resolved (2026-08-11)
+Added `a_crashed_daemon_also_closes_an_open_gui`, which SIGKILLs the daemon
+rather than calling `quit()`. Mutation-checked: disabling the `daemon_gone`
+branch fails it. FR-20's "or a crash" clause now has an automated check rather
+than resting on inspection.
+
+### Q2 — resolved (2026-08-11)
+Confirmed the suspicion by reading ksni's `Service::event`: menu callbacks are
+invoked synchronously inside the D-Bus method handler, holding `&mut self`. The
+old callback opened a fresh session-bus connection and made a `NameHasOwner`
+round trip there, so a slow bus would have stalled the tray's own dispatch.
+
+Fixed properly rather than by detaching a thread: the daemon now watches the
+GUI's bus name via `NameOwnerChanged` on a background thread and keeps the
+answer in an `AtomicBool`, so the callback is a single atomic load. Verified
+five rapid "Show window" clicks produce exactly one GUI and the tray stays
+responsive throughout.
+
+### Q3 — closed, no change beyond a comment (2026-08-11)
+Not a privilege-escalation vector: both processes run as the invoking user, so
+anyone able to poison PATH can already execute code as them. The sibling lookup
+already resolves `/proc/self/exe` via `current_exe()`, which is the mechanism
+suggested; the bare-name fallback only fires when that sibling is missing, which
+in a packaged install means the package is broken. Documented as such rather
+than removed, since it is what lets a daemon started from an unusual location
+still find its GUI.
+
 ## Orchestrator Observations
 
 The four lanes produced almost entirely disjoint findings — no finding was
