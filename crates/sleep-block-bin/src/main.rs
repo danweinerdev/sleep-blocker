@@ -2,11 +2,13 @@
 // Linux-only in practice since it talks to systemd-logind.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod tray;
+
 use eframe::egui;
 
-use sleep_block_core::{Inhibitor, ScreenInhibitor};
+use sleep_block_core::SleepBlock;
 
-const REASON: &str = "User requested the system stay awake";
+use crate::tray::SleepTray;
 
 /// Fixed window size. Tall enough for the tallest state — the one where an
 /// error line is showing under the checkbox — so no content is ever clipped.
@@ -35,84 +37,70 @@ fn main() -> eframe::Result {
         ..Default::default()
     };
 
+    // One shared state, two surfaces. The tray owns a clone of the handle, not
+    // a copy of the locks, so a toggle from either side is seen by both.
+    let state = SleepBlock::new();
+    let tray = SleepTray::start(state.clone());
+
     eframe::run_native(
         "sleep-block",
         options,
-        Box::new(|_cc| Ok(Box::<App>::default())),
+        Box::new(move |_cc| Ok(Box::new(App::new(state, tray)))),
     )
 }
 
-#[derive(Default)]
 struct App {
-    /// `Some` exactly when sleep is currently inhibited. This single field is
-    /// the source of truth for the UI state — there is no separate bool that
-    /// could drift out of sync with the lock we actually hold.
-    inhibitor: Option<Inhibitor>,
-    /// `Some` only when sleep is blocked *and* the user opted into keeping the
-    /// screen awake too. Screen blanking and locking are a separate mechanism
-    /// from sleep, so this is a second lock rather than a flag on the first.
-    screen_inhibitor: Option<ScreenInhibitor>,
-    /// The checkbox state. Deliberately independent of `screen_inhibitor`: the
-    /// preference persists while sleep blocking is off, so re-enabling restores
-    /// the user's choice instead of silently resetting it.
-    keep_screen_awake: bool,
-    /// Set when acquiring fails, so the user sees why nothing happened.
+    /// Shared with the tray. The locks live here, not in the GUI, so both
+    /// surfaces read and write the same state.
+    state: SleepBlock,
+    /// Kept alive for as long as the app runs: dropping the handle would stop
+    /// the tray service. `None` when no StatusNotifierItem host was found.
+    tray: Option<ksni::blocking::Handle<SleepTray>>,
+    /// Set when an action fails, so the user sees why nothing happened.
     error: Option<String>,
 }
 
 impl App {
-    fn is_active(&self) -> bool {
-        self.inhibitor.is_some()
+    fn new(state: SleepBlock, tray: Option<ksni::blocking::Handle<SleepTray>>) -> Self {
+        Self {
+            state,
+            tray,
+            error: None,
+        }
     }
 
     fn toggle(&mut self) {
-        self.error = None;
-
-        if self.inhibitor.is_some() {
-            // Dropping the inhibitors releases both locks: the logind descriptor
-            // closes, and `ScreenInhibitor`'s `Drop` calls `UnInhibit`.
-            self.inhibitor = None;
-            self.screen_inhibitor = None;
-            return;
-        }
-
-        match Inhibitor::acquire(REASON) {
-            Ok(inhibitor) => self.inhibitor = Some(inhibitor),
-            Err(e) => {
-                self.error = Some(e.to_string());
-                return;
-            }
-        }
-
-        self.sync_screen_inhibitor();
+        self.error = self.state.toggle().err().map(|e| e.to_string());
+        self.refresh_tray();
     }
 
-    /// Brings the screen lock in line with the checkbox. Called both when the
-    /// main toggle turns on and when the checkbox itself changes, so ticking the
-    /// box mid-session takes effect immediately rather than on the next toggle.
-    ///
-    /// A failure here leaves sleep blocking intact: the screen lock is the
-    /// secondary concern, and losing it is not a reason to let the machine
-    /// suspend. The error text explains what happened.
-    fn sync_screen_inhibitor(&mut self) {
-        let wanted = self.keep_screen_awake && self.inhibitor.is_some();
+    fn set_keep_screen_awake(&mut self, wanted: bool) {
+        self.error = self
+            .state
+            .set_keep_screen_awake(wanted)
+            .err()
+            .map(|e| format!("Screen lock not blocked: {e}"));
+        self.refresh_tray();
+    }
 
-        match (wanted, self.screen_inhibitor.is_some()) {
-            (true, false) => match ScreenInhibitor::acquire(REASON) {
-                Ok(screen) => self.screen_inhibitor = Some(screen),
-                Err(e) => {
-                    self.keep_screen_awake = false;
-                    self.error = Some(format!("Screen lock not blocked: {e}"));
-                }
-            },
-            (false, true) => self.screen_inhibitor = None,
-            _ => {}
+    /// Tells the tray to re-read the shared state. Without this the icon would
+    /// keep its previous appearance until something else prompted a redraw,
+    /// since ksni has no way to observe the state changing underneath it.
+    fn refresh_tray(&self) {
+        if let Some(tray) = &self.tray {
+            tray.update(|_| {});
         }
     }
 }
 
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        // The tray can toggle the state from its own thread, and egui has no
+        // way to learn about that. Polling once a second keeps the window from
+        // showing a stale reading without burning a core on a busy redraw loop.
+        ui.ctx()
+            .request_repaint_after(std::time::Duration::from_secs(1));
+
         // The frame must be told to fill the window. Left to itself it wraps
         // only its contents, leaving the remainder of the viewport unpainted —
         // which shows up as a black bar below the last control.
@@ -122,24 +110,36 @@ impl eframe::App for App {
             ui.vertical_centered(|ui| {
                 ui.add_space(16.0);
 
-                let active = self.is_active();
-                ui.heading(if active { "Awake" } else { "Sleep allowed" });
+                // Read once per frame. The tray may have changed this state on
+                // another thread, so the window renders from the shared value
+                // rather than any local copy.
+                let status = self.state.snapshot();
+
+                ui.heading(if status.sleep_blocked {
+                    "Awake"
+                } else {
+                    "Sleep allowed"
+                });
                 ui.add_space(12.0);
 
-                if self.indicator(ui, active).clicked() {
+                if self.indicator(ui, status.sleep_blocked).clicked() {
                     self.toggle();
                 }
 
                 ui.add_space(12.0);
-                ui.label(if self.is_active() {
+                ui.label(if status.sleep_blocked {
                     "Sleep is blocked.\nClick to allow sleeping again."
                 } else {
                     "The system can suspend normally.\nClick to keep it awake."
                 });
 
                 ui.add_space(14.0);
+                // `checkbox` needs somewhere to write, but the shared state is
+                // authoritative: seed the local from it each frame and push any
+                // change straight back, so the tray's view cannot be clobbered.
+                let mut keep_screen_awake = status.keep_screen_awake;
                 let toggled = ui
-                    .checkbox(&mut self.keep_screen_awake, "Also keep screen on")
+                    .checkbox(&mut keep_screen_awake, "Also keep screen on")
                     .on_hover_text(
                         "Additionally block screen blanking and locking.\n\
                          Leave off to let the monitors sleep as usual.",
@@ -149,7 +149,7 @@ impl eframe::App for App {
                     // Clear a stale failure so the retry isn't shown alongside
                     // the previous attempt's error.
                     self.error = None;
-                    self.sync_screen_inhibitor();
+                    self.set_keep_screen_awake(keep_screen_awake);
                 }
 
                 if let Some(error) = &self.error {

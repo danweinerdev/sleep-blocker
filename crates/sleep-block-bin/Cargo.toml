@@ -16,3 +16,5 @@ eframe = { version = "0.36.1", default-features = false, features = [
     "wayland",
     "x11",
 ] }
+ksni = { version = "0.3.6", default-features = false, features = ["blocking", "async-io"] }
+png = "0.18.1"
