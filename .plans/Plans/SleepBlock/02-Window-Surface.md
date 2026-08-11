@@ -64,7 +64,7 @@ cannot drift.
 - Identity recheck: git log --format=%H, 2026-08-10 21:05, matches recorded revision 70acc5209d1107b73d135dc2c9d3701618663a34
 - Focused review: `git show 70acc5209d1107b73d135dc2c9d3701618663a34`; complete task diff reviewed for correctness, scope, tests, maintainability, and task boundary
 - Reviewed candidate / final: 70acc5209d1107b73d135dc2c9d3701618663a34
-- Review result: PASS
+- Review result: PASS/Aligned
 
 | Command | Working directory | Result | Observable evidence |
 |---|---|---|---|
@@ -90,7 +90,7 @@ where a maintainer will find it.
 - Identity recheck: git log --format=%H, 2026-08-10 21:05, matches recorded revision 18801ae1d8880344e3856d907e2391a8d0c59397
 - Focused review: `git show 18801ae1d8880344e3856d907e2391a8d0c59397`; complete task diff reviewed for correctness, scope, tests, maintainability, and task boundary
 - Reviewed candidate / final: 18801ae1d8880344e3856d907e2391a8d0c59397
-- Review result: PASS
+- Review result: PASS/Aligned
 
 | Tool / inspection | Context | Result | Observable evidence |
 |---|---|---|---|
@@ -120,7 +120,7 @@ an edge drag. Both `min_inner_size` and `max_inner_size` must be pinned.
 - Identity recheck: git log --format=%H, 2026-08-10 21:05, matches recorded revision 025c10c6e3c57569a531baa69509576c167b05ca
 - Focused review: `git show 025c10c6e3c57569a531baa69509576c167b05ca`; complete task diff reviewed for correctness, scope, tests, maintainability, and task boundary
 - Reviewed candidate / final: 025c10c6e3c57569a531baa69509576c167b05ca
-- Review result: PASS
+- Review result: PASS/Aligned
 
 | Command | Working directory | Result | Observable evidence |
 |---|---|---|---|

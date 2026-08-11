@@ -60,7 +60,7 @@ categories makes the application appear twice in the menu.
 - Identity recheck: git log --format=%H, 2026-08-10 21:05, matches recorded revision deebef794ef7119d5d8a58ec303007a037a79042
 - Focused review: `git show deebef794ef7119d5d8a58ec303007a037a79042`; complete task diff reviewed for correctness, scope, tests, maintainability, and task boundary
 - Reviewed candidate / final: deebef794ef7119d5d8a58ec303007a037a79042
-- Review result: PASS
+- Review result: PASS/Aligned
 
 | Command | Working directory | Result | Observable evidence |
 |---|---|---|---|
@@ -93,7 +93,7 @@ where every design looks acceptable.
 - Identity recheck: git log --format=%H, 2026-08-10 21:05, matches recorded revision f307da466e3685ca49f9e97632175c60bf3043f3
 - Focused review: `git show f307da466e3685ca49f9e97632175c60bf3043f3`; complete task diff reviewed for correctness, scope, tests, maintainability, and task boundary
 - Reviewed candidate / final: f307da466e3685ca49f9e97632175c60bf3043f3
-- Review result: PASS
+- Review result: PASS/Aligned
 
 | Tool / inspection | Context | Result | Observable evidence |
 |---|---|---|---|
@@ -138,7 +138,7 @@ tests exist to convert this into a build failure.
 - Identity recheck: git log --format=%H, 2026-08-10 21:05, matches recorded revision 8a5e549a3535b654c2a6fdfbee5af6346b164b98
 - Focused review: `git show 8a5e549a3535b654c2a6fdfbee5af6346b164b98`; complete task diff reviewed for correctness, scope, tests, maintainability, and task boundary
 - Reviewed candidate / final: 8a5e549a3535b654c2a6fdfbee5af6346b164b98
-- Review result: PASS
+- Review result: PASS/Aligned
 
 | Command | Working directory | Result | Observable evidence |
 |---|---|---|---|

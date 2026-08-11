@@ -51,7 +51,7 @@ this is expected and not a broken tree.
 - Identity recheck: git log --format=%H, 2026-08-10 21:05, matches recorded revision bb60d3438f5958d583633491a9b7436e617b8c99
 - Focused review: `git show bb60d3438f5958d583633491a9b7436e617b8c99`; complete task diff reviewed for correctness, scope, tests, maintainability, and task boundary
 - Reviewed candidate / final: bb60d3438f5958d583633491a9b7436e617b8c99
-- Review result: PASS
+- Review result: PASS/Aligned
 
 | Tool / inspection | Context | Result | Observable evidence |
 |---|---|---|---|
@@ -90,7 +90,7 @@ what it was written to call.
 - Identity recheck: git log --format=%H, 2026-08-10 21:05, matches recorded revision 553f02db97710586570fcd1e1bab5b773eac7cb9
 - Focused review: `git show 553f02db97710586570fcd1e1bab5b773eac7cb9`; complete task diff reviewed for correctness, scope, tests, maintainability, and task boundary
 - Reviewed candidate / final: 553f02db97710586570fcd1e1bab5b773eac7cb9
-- Review result: PASS
+- Review result: PASS/Aligned
 
 | Command | Working directory | Result | Observable evidence |
 |---|---|---|---|
