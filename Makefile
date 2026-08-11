@@ -47,7 +47,6 @@ CARGO_CACHE ?= $(CURDIR)/tmp/cargo
 #
 # A dirty tree appends `.dirty` so an uncommitted build is never mistaken for
 # a reproducible one.
-GIT_DESCRIBE := $(shell git describe --tags --long --always --dirty 2>/dev/null)
 COMMITS_SINCE_TAG := $(shell git describe --tags --long 2>/dev/null | sed -n 's/.*-\([0-9]\+\)-g[0-9a-f]\+$$/\1/p')
 GIT_SHA := $(shell git rev-parse --short HEAD 2>/dev/null)
 GIT_DIRTY := $(shell git status --porcelain 2>/dev/null | grep -qv '^??' && echo .dirty)

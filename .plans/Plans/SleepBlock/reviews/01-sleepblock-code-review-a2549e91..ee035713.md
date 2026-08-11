@@ -34,15 +34,15 @@ findings:
   - id: F-06
     severity: minor
     title: "GIT_DESCRIBE computed but never used"
-    status: open
+    status: fixed
   - id: F-07
     severity: minor
     title: "zbus declared directly instead of workspace = true"
-    status: open
+    status: fixed
   - id: F-08
     severity: minor
     title: "event-listener dependency not recorded in the plan's Key Decisions"
-    status: open
+    status: fixed
 followups: []
 ---
 
@@ -270,6 +270,22 @@ now states that nothing is ever hidden, closing exits the process, and
 ### F-05 — fixed (2026-08-11)
 The design's Error Handling table is accurate again once F-01 landed; extended
 to record *how* the error crosses the process boundary.
+
+### F-06 — fixed (2026-08-11)
+Removed the unused `GIT_DESCRIBE` assignment from the Makefile. `RPM_RELEASE`
+was already derived from `COMMITS_SINCE_TAG`/`GIT_SHA`/`GIT_DIRTY`; verified
+`make release-id` still produces the same shape afterwards.
+
+### F-07 — fixed (2026-08-11)
+`sleep-block-bin` now uses `zbus.workspace = true`, matching `sleep-block-core`.
+Verified with `cargo tree` that it still resolves to zbus v5.19.0, so the two
+declarations that happened to agree are now structurally unable to diverge.
+
+### F-08 — fixed (2026-08-11)
+Recorded `zbus` and `event-listener` in the plan's Dependencies section rather
+than Key Decisions: neither was a weighed alternative the way the
+async-io-vs-tokio choice was, so listing them as decisions would overstate the
+deliberation.
 
 ## Orchestrator Observations
 

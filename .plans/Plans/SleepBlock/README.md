@@ -111,6 +111,9 @@ what makes the rest verifiable at all.
 - A StatusNotifierItem host for the tray; absence is non-fatal.
 - `rpm-build` and `desktop-file-utils` for packaging.
 - ImageMagick for regenerating icons (build-time only; PNGs are committed).
+- `zbus` for the D-Bus contract between the daemon and the window, and
+  `event-listener` for the daemon's shutdown signal — a one-shot notification
+  that avoids polling or a channel for a single wakeup.
 
 ## Plan Completion Evidence
 
