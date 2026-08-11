@@ -210,11 +210,10 @@ noted against the criterion.
   rendered at 22 px. Satisfies **NFR-02**, **NFR-03**.
 - [x] **AC-13**: *(inspection)* — The window's indicator conveys its state through
   shape and accompanying text as well as colour. Satisfies **NFR-04**.
-- [x] **AC-15**: *(inspection)* — The screen-lock inhibitor is acquired only when
-  sleep blocking is already held — the state transition is guarded on both the
-  user's preference and the presence of the sleep inhibitor. Satisfies
-  **FR-06**. *Refactor risk: a reworked state machine could drop the guard
-  undetected; this is the strongest candidate for a future unit test.*
+- [x] **AC-15**: *(automated)* — The screen-lock inhibitor is acquired only when
+  sleep blocking is already held; enabling the preference alone records it
+  without taking a lock, and the preference survives a full toggle cycle.
+  Satisfies **FR-06**.
 - [x] **AC-16**: *(inspection)* — The window presents a circular indicator acting
   as the toggle control and a labelled checkbox for the screen-lock option.
   Satisfies **FR-07**.
@@ -223,9 +222,10 @@ noted against the criterion.
   when that state changes. Satisfies **FR-09**. *Refactor risk: no test exercises
   a round trip between the two surfaces; the synchronisation was confirmed by
   driving the tray over D-Bus and observing the published state change.*
-- [x] **AC-18**: *(inspection)* — The tray menu offers the sleep toggle, the
-  screen-lock option, and a quit action that releases all locks before exiting.
-  Satisfies **FR-10**.
+- [x] **AC-18**: *(automated)* — The tray menu always offers the sleep toggle,
+  the screen-lock option, and quit; the toggle's label tracks the current state;
+  and "Show window" appears first only when hide-on-close is enabled. Satisfies
+  **FR-10**.
 - [x] **AC-19**: *(inspection)* — A failed acquisition leaves the prior state
   unchanged and records the reason for display, rather than applying a partial
   transition. Satisfies **FR-11**, **FR-12**.

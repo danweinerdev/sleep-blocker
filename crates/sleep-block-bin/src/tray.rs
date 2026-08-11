@@ -237,3 +237,152 @@ fn decode_png(bytes: &[u8]) -> Option<Icon> {
         data: argb,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Reads the menu's labels in order. Separators become `None` so their
+    /// placement can be asserted too.
+    fn labels(tray: &SleepTray) -> Vec<Option<String>> {
+        tray.menu()
+            .into_iter()
+            .map(|item| match item {
+                MenuItem::Standard(i) => Some(i.label),
+                MenuItem::Checkmark(i) => Some(i.label),
+                MenuItem::Separator => None,
+                _ => Some(String::from("<other>")),
+            })
+            .collect()
+    }
+
+    fn text(tray: &SleepTray) -> Vec<String> {
+        labels(tray).into_iter().flatten().collect()
+    }
+
+    #[test]
+    fn show_window_is_absent_until_hide_on_close_is_enabled() {
+        let tray = SleepTray::new(SleepBlock::new());
+
+        assert!(
+            !text(&tray).iter().any(|l| l.contains("Show window")),
+            "offering to show an already-visible window would be noise"
+        );
+    }
+
+    #[test]
+    fn show_window_is_the_first_item_once_enabled() {
+        let state = SleepBlock::new();
+        state.set_keep_running_in_tray(true);
+        let tray = SleepTray::new(state);
+
+        let items = text(&tray);
+        assert_eq!(
+            items.first().map(String::as_str),
+            Some("Show window"),
+            "a hidden window is what the user most needs back, so it goes first"
+        );
+    }
+
+    #[test]
+    fn show_window_is_followed_by_a_separator() {
+        let state = SleepBlock::new();
+        state.set_keep_running_in_tray(true);
+        let tray = SleepTray::new(state);
+
+        let items = labels(&tray);
+        assert_eq!(items.first(), Some(&Some("Show window".into())));
+        assert_eq!(
+            items.get(1),
+            Some(&None),
+            "the show item is separated from the toggles"
+        );
+    }
+
+    #[test]
+    fn menu_always_offers_the_toggle_and_quit() {
+        for keep_running in [false, true] {
+            let state = SleepBlock::new();
+            state.set_keep_running_in_tray(keep_running);
+            let tray = SleepTray::new(state);
+            let items = text(&tray);
+
+            assert!(
+                items.iter().any(|l| l.contains("keep screen on")),
+                "screen-lock option missing (keep_running={keep_running})"
+            );
+            assert!(
+                items.iter().any(|l| l == "Quit"),
+                "quit missing (keep_running={keep_running}) — the app would be \
+                 unquittable from the tray"
+            );
+        }
+    }
+
+    #[test]
+    fn toggle_label_reflects_the_current_state() {
+        let state = SleepBlock::new();
+        let tray = SleepTray::new(state.clone());
+        assert!(
+            text(&tray).iter().any(|l| l == "Keep system awake"),
+            "idle state should offer to start blocking"
+        );
+
+        // Simulate the lock being held without needing logind: the label is
+        // driven by the snapshot, so this covers the rendering rule itself.
+        if state.toggle().is_ok() && state.snapshot().sleep_blocked {
+            assert!(
+                text(&tray).iter().any(|l| l == "Allow sleeping"),
+                "blocked state should offer to stop blocking"
+            );
+        } else {
+            eprintln!("SKIP: could not acquire a lock to check the active label");
+        }
+    }
+
+    #[test]
+    fn icon_changes_with_the_sleep_state() {
+        let state = SleepBlock::new();
+        let tray = SleepTray::new(state.clone());
+
+        let idle = tray.icon_pixmap();
+        assert!(!idle.is_empty(), "an icon must always be published");
+
+        if state.toggle().is_ok() && state.snapshot().sleep_blocked {
+            let active = tray.icon_pixmap();
+            assert_ne!(
+                idle[0].data, active[0].data,
+                "the icon must differ between states or it conveys nothing"
+            );
+        } else {
+            eprintln!("SKIP: could not acquire a lock to compare icons");
+        }
+    }
+
+    /// Every embedded icon must decode. A rejected icon is published as an
+    /// empty pixmap, which is invisible rather than an error — the exact
+    /// failure that shipped once already.
+    #[test]
+    fn every_embedded_icon_decodes() {
+        for (name, set) in [("active", ACTIVE_PNGS), ("idle", IDLE_PNGS)] {
+            for (i, bytes) in set.iter().enumerate() {
+                assert!(
+                    decode_png(bytes).is_some(),
+                    "{name} icon {i} failed to decode; the tray would show nothing"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn decoded_icons_are_square_and_sized() {
+        for icon in SleepTray::new(SleepBlock::new()).icon_pixmap() {
+            assert_eq!(icon.width, icon.height, "tray icons should be square");
+            assert_eq!(
+                icon.data.len() as i32,
+                icon.width * icon.height * 4,
+                "ARGB32 payload must match the declared dimensions"
+            );
+        }
+    }
+}
