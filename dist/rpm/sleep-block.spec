@@ -19,8 +19,14 @@
 # architecture, which is not necessarily the build host's. `make package` passes
 # `--target` so rpmbuild tags the package correctly; without it an aarch64
 # binary would be packaged and labelled x86_64.
+# Cargo.toml is the single source of truth for the version. `make package`
+# passes it as --define 'version ...'; the fallback below only applies when the
+# spec is built by hand, and is deliberately obvious rather than plausible so a
+# mismatched package is easy to spot.
+%{!?version: %global version 0.0.0}
+
 Name:           sleep-block
-Version:        0.1.0
+Version:        %{version}
 Release:        1%{?dist}
 Summary:        GUI toggle that stops the system from sleeping
 
@@ -85,5 +91,6 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/%{name}.desktop
 %{_datadir}/icons/hicolor/scalable/apps/%{name}.svg
 
 %changelog
-* Mon Aug 10 2026 Daniel Weiner <info@phantomnet.net> - 0.1.0-1
-- Initial package
+* Mon Aug 10 2026 Daniel Weiner <info@phantomnet.net> - %{version}-1
+- Built from Cargo.toml version %{version}; see the git log and tags for the
+  change history rather than maintaining it in two places.

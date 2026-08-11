@@ -188,7 +188,30 @@ package-arch:
 	tar -C target/package -czf $(RPM_TOPDIR)/SOURCES/$(NAME)-$(VERSION).tar.gz $(NAME)-$(VERSION)
 	@# --target is what makes rpmbuild tag the package with ARCH rather than
 	@# inferring it from the build host, which would mislabel the cross build.
-	rpmbuild -bb --target $(ARCH) --define '_topdir $(RPM_TOPDIR)' $(SPEC)
+	@# --define 'version' keeps Cargo.toml the only place the version is written.
+	rpmbuild -bb --target $(ARCH) \
+	    --define '_topdir $(RPM_TOPDIR)' \
+	    --define 'version $(VERSION)' \
+	    $(SPEC)
+
+# --- Versioning --------------------------------------------------------------
+#
+# Cargo.toml is the single source of truth; the RPM spec receives the version as
+# a define, so there is nothing else to keep in step.
+#
+# Each target bumps the version, runs the full containerized build and test, and
+# only commits and tags if that succeeds. A failure leaves Cargo.toml modified
+# but the history untouched.
+.PHONY: bump-major bump-minor bump-patch version
+bump-major:
+	./bump-version.py major
+bump-minor:
+	./bump-version.py minor
+bump-patch:
+	./bump-version.py patch
+
+version:
+	@echo $(VERSION)
 
 # Drop into the build container for debugging.
 container-shell: container-image
