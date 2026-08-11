@@ -94,7 +94,7 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "sleep-block",
         options,
-        Box::new(move |_cc| Ok(Box::new(App::new(client)))),
+        Box::new(move |cc| Ok(Box::new(App::new(client, &cc.egui_ctx)))),
     )
 }
 
@@ -111,7 +111,22 @@ struct App {
 }
 
 impl App {
-    fn new(client: DaemonClient) -> Self {
+    fn new(client: DaemonClient, ctx: &egui::Context) -> Self {
+        // A change made from the tray must show up here without the user
+        // touching the window. `request_repaint_after` only schedules a
+        // timeout, which an unfocused window may not service promptly; calling
+        // `request_repaint` from another thread always wakes the event loop.
+        //
+        // 400ms is a compromise: fast enough that the window never looks stuck,
+        // slow enough to stay invisible in CPU use.
+        let waker = ctx.clone();
+        std::thread::spawn(move || {
+            loop {
+                std::thread::sleep(std::time::Duration::from_millis(400));
+                waker.request_repaint();
+            }
+        });
+
         Self {
             client,
             error: None,

@@ -69,7 +69,7 @@ impl DaemonClient {
             Err(e) => return Err(ConnectError::Bus(e)),
         }
 
-        let proxy = match SleepBlockServiceProxyBlocking::new(&connection) {
+        let proxy = match uncached_proxy(&connection) {
             Ok(p) if p.sleep_blocked().is_ok() => p,
             _ => {
                 // No daemon yet. Start one and wait briefly for it to claim the
@@ -79,7 +79,7 @@ impl DaemonClient {
                 let mut found = None;
                 for _ in 0..40 {
                     std::thread::sleep(std::time::Duration::from_millis(50));
-                    if let Ok(p) = SleepBlockServiceProxyBlocking::new(&connection)
+                    if let Ok(p) = uncached_proxy(&connection)
                         && p.sleep_blocked().is_ok()
                     {
                         found = Some(p);
@@ -152,6 +152,20 @@ impl DaemonClient {
     pub fn quit_daemon(&self) {
         let _ = self.proxy.quit();
     }
+}
+
+/// A proxy that always asks the daemon rather than serving cached values.
+///
+/// zbus caches properties and refreshes them from `PropertiesChanged`. The GUI
+/// re-reads every frame regardless, so the cache saves nothing — and when a
+/// refresh is missed it leaves the window showing state that changed elsewhere
+/// minutes ago, which is worse than the round trip it avoids.
+fn uncached_proxy(
+    connection: &zbus::blocking::Connection,
+) -> zbus::Result<SleepBlockServiceProxyBlocking<'static>> {
+    SleepBlockServiceProxyBlocking::builder(connection)
+        .cache_properties(zbus::proxy::CacheProperties::No)
+        .build()
 }
 
 fn read_status(proxy: &SleepBlockServiceProxyBlocking<'static>) -> Status {

@@ -405,3 +405,67 @@ fn gui_name_taken() -> bool {
         .name_has_owner(sleep_block_core::ipc::GUI_BUS_NAME.try_into().unwrap())
         .unwrap_or(false)
 }
+
+/// A client must see changes made by *someone else*.
+///
+/// This is the shape that broke twice. The GUI polls its proxy every frame, but
+/// zbus caches properties and refreshes them from `PropertiesChanged`; when
+/// that refresh does not land, the window shows state that changed elsewhere
+/// long ago while every other surface is correct.
+///
+/// The change here is made through a *separate* connection, exactly as a tray
+/// click does. Driving it through the same proxy would refresh the cache as a
+/// side effect and hide the bug.
+#[test]
+fn a_polling_client_observes_changes_made_elsewhere() {
+    if !logind_available() {
+        eprintln!("SKIP: systemd-logind unavailable");
+        return;
+    }
+    let daemon = daemon_or_skip!("observe");
+
+    // The "GUI": a long-lived proxy that only ever reads.
+    let watcher = daemon.proxy();
+    assert!(!watcher.sleep_blocked().unwrap(), "should start unblocked");
+
+    // The "tray": a different connection making the change.
+    let actor = daemon.proxy();
+    actor.toggle().expect("toggle from another connection");
+
+    assert!(
+        wait_for(|| watcher.sleep_blocked().unwrap_or(false)),
+        "a reader must observe a change made through another connection; \
+         a stale cache here is what left the window disagreeing with the tray"
+    );
+
+    actor.toggle().expect("toggle back");
+    assert!(
+        wait_for(|| !watcher.sleep_blocked().unwrap_or(true)),
+        "and must observe it being undone"
+    );
+}
+
+/// The same property, via the preference rather than the lock — this is the one
+/// the user reported as the tray and window disagreeing about a checkbox.
+#[test]
+fn a_polling_client_observes_preference_changes_made_elsewhere() {
+    let daemon = daemon_or_skip!("observepref");
+    let watcher = daemon.proxy();
+    let actor = daemon.proxy();
+
+    assert!(!watcher.keep_screen_awake().unwrap_or(true));
+
+    actor
+        .set_keep_screen_awake(true)
+        .expect("set from another connection");
+    assert!(
+        wait_for(|| watcher.keep_screen_awake().unwrap_or(false)),
+        "the checkbox state must propagate to a reader on another connection"
+    );
+
+    actor.set_keep_screen_awake(false).expect("unset");
+    assert!(
+        wait_for(|| !watcher.keep_screen_awake().unwrap_or(true)),
+        "and must propagate when turned back off"
+    );
+}
