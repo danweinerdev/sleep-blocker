@@ -51,13 +51,13 @@ tasks:
     depends_on: ["5.6"]
   - id: "5.8"
     title: "Log PropertiesChanged emission failures"
-    status: planned
+    status: deferred
     verification: "A failed property emission leaves a line in the daemon's log rather than only a slightly-late indicator. Serves NFR-08."
     justifies: "Carries review finding F-16. Announce currently discards all four emission results, so a stuck-looking indicator has no trail to grep -- the polling fallback hides the failure rather than reporting it."
     depends_on: ["5.7"]
   - id: "5.9"
     title: "Give AC-33 an evidence row in this phase"
-    status: planned
+    status: deferred
     verification: "A Completion Evidence row in this phase runs make package, or the phase records that AC-33's container half was verified in phase 4 and only release supersession is new here."
     justifies: "Carries review finding F-17. AC-33 is checked off with no make package run evidenced in this phase; its container and multi-arch half was inherited from phase 4."
     depends_on: ["5.7"]
@@ -316,28 +316,37 @@ nothing.
 
 ## 5.8: Log PropertiesChanged emission failures
 
+Deferred out of this phase (2026-08-11), carrying review finding F-16.
+
 ### Subtasks
-- [ ] Report a failed emission rather than discarding the result
+- [x] Deferred — not attempted in this phase
 
 ### Notes
-Revision boundary: an emission failure is observable in the daemon's log.
+Revision boundary: none taken. `Service::announce` still discards its emission
+results, so a failed emission leaves no trail. The polling fallback means the
+user-visible effect is at worst a slightly late indicator, which is why this was
+judged not worth holding the phase open for.
 
 ### Completion Evidence
 
-Pending — not complete.
+Deferred — no revision claimed. Tracked by review 02 finding F-16 (FU-01).
 
 ## 5.9: Give AC-33 an evidence row in this phase
 
+Deferred out of this phase (2026-08-11), carrying review finding F-17.
+
 ### Subtasks
-- [ ] Either run `make package` as phase evidence, or record the split with phase 4
+- [x] Deferred — not attempted in this phase
 
 ### Notes
-Revision boundary: AC-33's checked state is backed by evidence in the phase that
-claims it.
+Revision boundary: none taken. AC-33's container and multi-architecture half was
+built and evidenced in phase 4; only the release-supersession half is new here,
+and that is evidenced under task 5.1. The gap is that no row in *this* phase
+re-runs `make package`.
 
 ### Completion Evidence
 
-Pending — not complete.
+Deferred — no revision claimed. Tracked by review 02 finding F-17 (FU-02).
 
 ## Acceptance Criteria
 - [x] **AC-24**: The daemon exports its interface and every rendered property is readable.
