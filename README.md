@@ -83,10 +83,16 @@ in such an environment is not evidence that the inhibitors work; run the suite
 in a real desktop session to get that.
 
 One limitation worth naming: `org.freedesktop.ScreenSaver` exposes only
-`Inhibit` and `UnInhibit`, with no way to read inhibition state back. The screen
-lock tests can therefore confirm that acquire and release succeed, but cannot
-assert that the desktop honours the inhibitor. Verifying that means letting the
-screen sit idle past its lock timeout.
+`Inhibit` and `UnInhibit`, with no way to read inhibition state back. Neither
+PowerDevil's `HasInhibition` nor its deprecated `ListInhibitions` reports a
+kwin-held screen inhibitor, so there is no D-Bus probe to assert against. The
+screen lock tests can therefore confirm that acquire and release succeed, but
+cannot automatically confirm the desktop registered them.
+
+That last step has been verified by hand instead: with the checkbox ticked,
+`sleep-block` appears in KDE's *Power & Battery* tray popup as a blocking
+application, and disappears when it is unticked. Re-check that way after
+touching `ScreenInhibitor`.
 
 ## Licence
 

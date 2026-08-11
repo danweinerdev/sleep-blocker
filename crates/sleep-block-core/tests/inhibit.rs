@@ -163,10 +163,14 @@ fn screen_inhibitor_acquires_and_releases() {
     };
 
     // The ScreenSaver interface exposes no way to read inhibition state back —
-    // kwin implements only Inhibit/UnInhibit — so there is no assertion to make
-    // about the desktop's view here. What this test does pin down is that the
-    // call succeeds and that release runs without error or panic, which is
-    // where the cookie-based API is easy to get wrong.
+    // kwin implements only Inhibit/UnInhibit, and PowerDevil's HasInhibition
+    // and ListInhibitions do not report kwin-held inhibitors — so there is no
+    // assertion to make about the desktop's view here. What this test does pin
+    // down is that the call succeeds and that release runs without error or
+    // panic, which is where the cookie-based API is easy to get wrong.
+    //
+    // That the desktop actually registers the inhibitor has been confirmed
+    // manually: it appears in KDE's Power & Battery tray popup while held.
     drop(screen);
 }
 
