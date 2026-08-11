@@ -70,8 +70,15 @@ desktop-file-install \
 # The binary embeds its own tray icons, but the desktop entry resolves its icon
 # through the theme, so the PNGs are installed as well.
 for size in 16 22 24 32 48 64 128 256; do
+    # The application icon, used by the desktop entry and launchers.
     install -Dpm0644 icons/%{name}-active-${size}.png \
         %{buildroot}%{_datadir}/icons/hicolor/${size}x${size}/apps/%{name}.png
+    # Both tray states, so a host that resolves IconName rather than using the
+    # inline pixmap can still show the current state.
+    install -Dpm0644 icons/%{name}-active-${size}.png \
+        %{buildroot}%{_datadir}/icons/hicolor/${size}x${size}/apps/%{name}-active.png
+    install -Dpm0644 icons/%{name}-idle-${size}.png \
+        %{buildroot}%{_datadir}/icons/hicolor/${size}x${size}/apps/%{name}-idle.png
 done
 install -Dpm0644 icons/%{name}-active.svg \
     %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/%{name}.svg
@@ -110,6 +117,8 @@ gtk-update-icon-cache -qf %{_datadir}/icons/hicolor &>/dev/null || :
 %{_bindir}/%{name}
 %{_datadir}/applications/%{name}.desktop
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
+%{_datadir}/icons/hicolor/*/apps/%{name}-active.png
+%{_datadir}/icons/hicolor/*/apps/%{name}-idle.png
 %{_datadir}/icons/hicolor/scalable/apps/%{name}.svg
 
 %changelog

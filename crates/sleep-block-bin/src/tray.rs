@@ -90,6 +90,22 @@ impl Tray for SleepTray {
         "Sleep Block".into()
     }
 
+    /// A themed icon name, which some hosts prefer over an inline pixmap.
+    ///
+    /// Both are published: the pixmap keeps the tray working when the package's
+    /// icons are not installed, while the name lets a host that ignores pixmaps
+    /// — or that wants to restyle the icon to match the panel — resolve it from
+    /// the hicolor theme the package populates.
+    fn icon_name(&self) -> String {
+        // Two distinct names so a host that prefers names over pixmaps still
+        // sees the state change. The package installs both into hicolor.
+        if self.state.snapshot().sleep_blocked {
+            "sleep-block-active".into()
+        } else {
+            "sleep-block-idle".into()
+        }
+    }
+
     /// Decoding on demand keeps the icon in step with the state without having
     /// to invalidate a cache when it changes.
     fn icon_pixmap(&self) -> Vec<Icon> {
@@ -362,6 +378,28 @@ mod tests {
     /// Every embedded icon must decode. A rejected icon is published as an
     /// empty pixmap, which is invisible rather than an error — the exact
     /// failure that shipped once already.
+    #[test]
+    fn icon_name_distinguishes_the_two_states() {
+        let state = SleepBlock::new();
+        let tray = SleepTray::new(state.clone());
+        let idle = tray.icon_name();
+        assert!(
+            !idle.is_empty(),
+            "an empty name lets a host fall back to nothing"
+        );
+
+        if state.toggle().is_ok() && state.snapshot().sleep_blocked {
+            assert_ne!(
+                idle,
+                tray.icon_name(),
+                "a host that resolves names rather than pixmaps must still see \
+                 the state change"
+            );
+        } else {
+            eprintln!("SKIP: could not acquire a lock to compare icon names");
+        }
+    }
+
     #[test]
     fn every_embedded_icon_decodes() {
         for (name, set) in [("active", ACTIVE_PNGS), ("idle", IDLE_PNGS)] {
