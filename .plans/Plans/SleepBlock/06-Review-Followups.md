@@ -3,7 +3,7 @@ title: "Review Follow-ups"
 type: phase
 plan: "SleepBlock"
 phase: 6
-status: in-progress
+status: complete
 created: 2026-08-11
 updated: 2026-08-11
 deliverable: "The two follow-ups phase 5's reviews raised but did not block on"
@@ -104,6 +104,7 @@ git-derived release supersedes the prior build. Satisfies **AC-35** and backs
 - VCS: git
 - Revision / checkpoint: 78f5e8b5e4ccfb1d1f401d7807411e84ee85bf28
 - Identity recheck: git rev-parse HEAD, 2026-08-11, matches recorded revision 78f5e8b5e4ccfb1d1f401d7807411e84ee85bf28
+- Final aligned review: Plans/SleepBlock/reviews/04-sleepblock-code-review-2acf3a50..78f5e8b5.md; frozen: 2acf3a504436835b241ff97ef2a4ad3393d282cd..78f5e8b5e4ccfb1d1f401d7807411e84ee85bf28
 
 | Command | Working directory | Result | Observable evidence |
 |---|---|---|---|
