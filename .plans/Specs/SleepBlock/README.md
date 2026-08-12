@@ -242,12 +242,12 @@ change from assuming otherwise.
   confirms only that the calls succeed, not that the desktop honours them.
   Re-check this by hand after any change to the screen-lock path.
 
-- [ ] **AC-34**: *(planned)* — A failed property announcement is visible in the
-  daemon's log rather than discarded silently. Satisfies **NFR-08**. *Not yet
-  implemented; tracked by plan task 6.1.*
-- [ ] **AC-35**: *(planned)* — AC-33's checked state is backed by an evidence row
-  in the artifact that claims it. Satisfies **FR-22**, **NFR-09**. *Not yet
-  implemented; tracked by plan task 6.2.*
+- [x] **AC-34**: *(inspection)* — A failed property announcement is visible in the
+  daemon's log rather than discarded silently. Satisfies **NFR-08**. *Implemented
+  by plan task 6.1; each failed emission logs a line naming the property.*
+- [x] **AC-35**: *(inspection)* — AC-33's checked state is backed by an evidence row
+  in the artifact that claims it. Satisfies **FR-22**, **NFR-09**. *Implemented by
+  plan task 6.2; phase 6 records a full `make package` run as the evidence row.*
 
 ### Verified by inspection
 

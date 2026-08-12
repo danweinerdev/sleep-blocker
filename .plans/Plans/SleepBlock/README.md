@@ -34,7 +34,7 @@ phases:
     depends_on: [4]
   - id: 6
     title: "Review Follow-ups"
-    status: planned
+    status: in-progress
     doc: "06-Review-Followups.md"
     depends_on: [5]
 ---

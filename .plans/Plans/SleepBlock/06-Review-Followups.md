@@ -3,19 +3,19 @@ title: "Review Follow-ups"
 type: phase
 plan: "SleepBlock"
 phase: 6
-status: planned
+status: in-progress
 created: 2026-08-11
 updated: 2026-08-11
 deliverable: "The two follow-ups phase 5's reviews raised but did not block on"
 tasks:
   - id: "6.1"
     title: "Log PropertiesChanged emission failures"
-    status: planned
+    status: complete
     verification: "A failed property emission leaves a line in the daemon's log rather than only a slightly late indicator. Serves NFR-08."
     justifies: "Carries review 02 finding F-16. `Service::announce` discards all four emission results, so a stuck-looking indicator has no trail to grep — the polling fallback hides the failure rather than reporting it."
   - id: "6.2"
     title: "Give AC-33 an evidence row"
-    status: planned
+    status: complete
     verification: "An evidence row runs `make package`, or the plan records that AC-33's container half was verified in phase 4 and only release supersession is new."
     justifies: "Carries review 02 finding F-17. AC-33 is checked off with no `make package` run evidenced in the phase claiming it."
 ---
@@ -36,7 +36,7 @@ rather than a functional one.
 ## 6.1: Log PropertiesChanged emission failures
 
 ### Subtasks
-- [ ] Report a failed emission rather than discarding the result
+- [x] Report a failed emission rather than discarding the result
 
 ### Notes
 Revision boundary: an emission failure is observable in the daemon's log.
@@ -49,12 +49,26 @@ announcement is a diagnostic event, not a failed operation.
 
 ### Completion Evidence
 
-Pending — not complete.
+- Verified: 2026-08-11
+- Repository: ~/Development/Code/sleep-block
+- VCS: git
+- Revision / checkpoint: 78f5e8b5e4ccfb1d1f401d7807411e84ee85bf28
+
+| Command | Working directory | Result | Observable evidence |
+|---|---|---|---|
+| `cargo clippy --workspace --all-targets` | . | PASS (exit 0) | no warnings; `announce` now logs each failed emission with the property name |
+| `cargo fmt --check` | . | PASS (exit 0) | no formatting diff |
+| `cargo test --workspace` | . | PASS (exit 0) | 43 passed across suites; 0 failed |
+
+`Service::announce` iterates the four `*_changed` emissions and writes
+`failed to announce <Property> changed: <error>` to stderr for any that fail,
+rather than discarding the result. Errors are deliberately not propagated,
+per the trap above. Satisfies **AC-34** (**NFR-08**).
 
 ## 6.2: Give AC-33 an evidence row
 
 ### Subtasks
-- [ ] Either run `make package` as evidence, or record the split with phase 4
+- [x] Either run `make package` as evidence, or record the split with phase 4
 
 ### Notes
 Revision boundary: AC-33's checked state is backed by evidence in the artifact
@@ -62,13 +76,43 @@ that claims it.
 
 ### Completion Evidence
 
-Pending — not complete.
+- Verified: 2026-08-11
+- Repository: ~/Development/Code/sleep-block
+- VCS: git
+- Revision / checkpoint: 78f5e8b5e4ccfb1d1f401d7807411e84ee85bf28
+
+| Command | Working directory | Result | Observable evidence |
+|---|---|---|---|
+| `make package` | . | PASS (exit 0) | container build: tests run, both arches packaged — `sleep-block-0.1.1-1.28.git78f5e8b.fc44.{x86_64,aarch64}.rpm` in `tmp/rpmbuild/RPMS/` |
+| `rpm -qp --qf '%{VERSION}-%{RELEASE}'` | . | PASS | `0.1.1-1.28.git78f5e8b.fc44` — release embeds the checkpoint commit |
+| `python3 -c "import rpm; rpm.labelCompare(...)"` | . | PASS (returns 1) | `1.28.git78f5e8b` orders after the previous build's `1.16.git1b83abf`, so the new package supersedes it |
+
+This run is the evidence row review 02's F-17 found missing: `make package`
+executed end-to-end at this phase's checkpoint, producing dual-arch RPMs whose
+git-derived release supersedes the prior build. Satisfies **AC-35** and backs
+**AC-33** (**FR-22**, **NFR-09**).
 
 ## Acceptance Criteria
-- [ ] **AC-34**: A failed property announcement is visible in the daemon's log.
-- [ ] **AC-35**: AC-33's checked state is backed by an evidence row, or the
+- [x] **AC-34**: A failed property announcement is visible in the daemon's log.
+- [x] **AC-35**: AC-33's checked state is backed by an evidence row, or the
   phase-4 split is recorded explicitly.
 
 ## Phase Completion Evidence
 
-Pending — not complete.
+- Verified: 2026-08-11
+- Repository: ~/Development/Code/sleep-block
+- VCS: git
+- Revision / checkpoint: 78f5e8b5e4ccfb1d1f401d7807411e84ee85bf28
+- Identity recheck: git rev-parse HEAD, 2026-08-11, matches recorded revision 78f5e8b5e4ccfb1d1f401d7807411e84ee85bf28
+
+| Command | Working directory | Result | Observable evidence |
+|---|---|---|---|
+| `cargo test --workspace` | . | PASS (exit 0) | 43 passed; 0 failed |
+| `cargo clippy --workspace --all-targets` | . | PASS (exit 0) | no warnings |
+| `cargo fmt --check` | . | PASS (exit 0) | no formatting diff |
+| `make package` | . | PASS (exit 0) | dual-arch RPMs at release `1.28.git78f5e8b` superseding `1.16.git1b83abf` |
+
+### Completed task identities
+
+- `6.1`: `78f5e8b5e4ccfb1d1f401d7807411e84ee85bf28`
+- `6.2`: `78f5e8b5e4ccfb1d1f401d7807411e84ee85bf28`
