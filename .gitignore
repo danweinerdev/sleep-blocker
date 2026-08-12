@@ -16,3 +16,4 @@ tmp/
 /.vscode
 /.zprofile
 /.zshrc
+__pycache__/
