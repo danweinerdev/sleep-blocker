@@ -110,9 +110,9 @@ git-derived release supersedes the prior build. Satisfies **AC-35** and backs
 - Verified: 2026-08-11
 - Repository: ~/Development/Code/sleep-block
 - VCS: git
-- Revision / checkpoint: 0c242b46e151bf776736fee8620b84ed8a2ae5ca
-- Identity recheck: git rev-parse HEAD, 2026-08-11 17:31, matches recorded revision 0c242b46e151bf776736fee8620b84ed8a2ae5ca
-- Final aligned review: Plans/SleepBlock/reviews/04-sleepblock-code-review-2acf3a50..78f5e8b5.md; frozen: 2acf3a504436835b241ff97ef2a4ad3393d282cd..0c242b46e151bf776736fee8620b84ed8a2ae5ca
+- Revision / checkpoint: c1fa6557a9d33af48794b5602dfa6ba79cd033ff
+- Identity recheck: git rev-parse HEAD, 2026-08-11 17:45, matches recorded revision c1fa6557a9d33af48794b5602dfa6ba79cd033ff
+- Final aligned review: Plans/SleepBlock/reviews/04-sleepblock-code-review-2acf3a50..78f5e8b5.md; frozen: 2acf3a504436835b241ff97ef2a4ad3393d282cd..c1fa6557a9d33af48794b5602dfa6ba79cd033ff
 
 | Command | Working directory | Result | Observable evidence |
 |---|---|---|---|

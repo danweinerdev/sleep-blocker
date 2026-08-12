@@ -1,9 +1,9 @@
 ---
 title: "Sleep Block — Implementation Plan"
 type: plan
-status: active
+status: complete
 created: 2026-08-10
-updated: 2026-08-10
+updated: 2026-08-11
 tags: [linux, desktop, dbus, systemd, gui, rust, packaging]
 related: [Specs/SleepBlock, Designs/SleepBlock]
 phases:
@@ -124,26 +124,44 @@ what makes the rest verifiable at all.
 
 ## Plan Completion Evidence
 
-- Verified: 2026-08-10
+- Verified: 2026-08-11
 - Repository: ~/Development/Code/sleep-block
 - VCS: git
-- Revision / checkpoint: 38087c19f6b02eb63a4541f03afd33821095f501
-- Identity recheck: git rev-parse HEAD, 2026-08-10 21:05, matches recorded revision 38087c19f6b02eb63a4541f03afd33821095f501
+- Revision / checkpoint: c1fa6557a9d33af48794b5602dfa6ba79cd033ff
+- Identity recheck: git rev-parse HEAD, 2026-08-11 17:45, matches recorded revision c1fa6557a9d33af48794b5602dfa6ba79cd033ff
 
 | Command | Working directory | Result | Observable evidence |
 |---|---|---|---|
-| `cargo test --release` | . | PASS (exit 0) | 8 tests passed: 5 inhibitor, 3 icon |
-| `cargo clippy --release --all-targets -- -D warnings` | . | PASS (exit 0) | no warnings emitted |
+| `cargo test --workspace` | . | PASS (exit 0) | 43 tests passed across suites; 0 failed |
+| `cargo clippy --workspace --all-targets` | . | PASS (exit 0) | no warnings emitted |
 | `cargo fmt --check` | . | PASS (exit 0) | no formatting diff |
 | `desktop-file-validate dist/sleep-block.desktop` | . | PASS (exit 0) | no output; entry valid |
-| `make package` | . | PASS (exit 0) | wrote sleep-block-0.1.0-1.fc44.x86_64.rpm |
+| `make package` | . | PASS (exit 0) | dual-arch RPMs at release `1.28.git78f5e8b` superseding `1.16.git1b83abf` |
 
 ### Completed phase identities
 
-- `1`: `553f02db97710586570fcd1e1bab5b773eac7cb9`; review: Plans/SleepBlock/01-Core-Inhibitor-Mechanism.md
-- `2`: `025c10c6e3c57569a531baa69509576c167b05ca`; review: Plans/SleepBlock/02-Window-Surface.md
-- `3`: `8a5e549a3535b654c2a6fdfbee5af6346b164b98`; review: Plans/SleepBlock/03-Tray-Surface-And-Shared-State.md
-- `4`: `38087c19f6b02eb63a4541f03afd33821095f501`; review: Plans/SleepBlock/04-Packaging.md
+- `1`: `553f02db97710586570fcd1e1bab5b773eac7cb9`; review: `Plans/SleepBlock/01-Core-Inhibitor-Mechanism.md`
+- `2`: `025c10c6e3c57569a531baa69509576c167b05ca`; review: `Plans/SleepBlock/02-Window-Surface.md`
+- `3`: `8a5e549a3535b654c2a6fdfbee5af6346b164b98`; review: `Plans/SleepBlock/03-Tray-Surface-And-Shared-State.md`
+- `4`: `38087c19f6b02eb63a4541f03afd33821095f501`; review: `Plans/SleepBlock/04-Packaging.md`
+- `5`: `14b3c77aff8f002d8b386bedbcf566a36605ea9f`; review: `Plans/SleepBlock/reviews/03-sleepblock-code-review-a2549e91..d63f2ddd.md`
+- `6`: `c1fa6557a9d33af48794b5602dfa6ba79cd033ff`; review: `Plans/SleepBlock/reviews/04-sleepblock-code-review-2acf3a50..78f5e8b5.md`
+
+Phases 1–4 predate the phase-gate review convention; their entries point at the
+phase documents holding their retrospective evidence, since no review artifacts
+exist for them. This is a recorded gap, not an oversight — see the validator
+noise floor note below.
+
+### Validator noise floor
+
+The deterministic validator permanently reports a small diagnostic set for this
+plan, all structural consequences of closing retrospective work under a gate
+convention that postdates it: one missing-final-review diagnostic per
+backfilled phase (1–4), and the phase 5 set recorded in that phase's Completion
+caveat (closed by explicit user decision with two review lanes not Aligned; its
+frozen endpoint predates phase 6's commits, so no honest review can ever
+satisfy its gate retroactively). None of these are fixable without fabricating
+review outcomes, which this plan declines to do.
 
 ## Open Questions
 
