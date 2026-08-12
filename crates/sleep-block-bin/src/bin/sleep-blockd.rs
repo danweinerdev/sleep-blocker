@@ -113,11 +113,28 @@ impl Service {
 impl Service {
     /// Emits PropertiesChanged for everything a mutation can move. Emitting a
     /// few unchanged values is cheaper than reasoning about which ones moved.
+    ///
+    /// A failed emission is logged but never propagated: the state change it
+    /// announces has already happened, and clients converge through their poll
+    /// regardless. Without the log line, that same poll would hide the failure
+    /// completely — a stuck-looking indicator with nothing to grep for.
     async fn announce(&self, emitter: &zbus::object_server::SignalEmitter<'_>) {
-        let _ = self.sleep_blocked_changed(emitter).await;
-        let _ = self.screen_blocked_changed(emitter).await;
-        let _ = self.keep_screen_awake_changed(emitter).await;
-        let _ = self.keep_running_in_tray_changed(emitter).await;
+        for (name, result) in [
+            ("SleepBlocked", self.sleep_blocked_changed(emitter).await),
+            ("ScreenBlocked", self.screen_blocked_changed(emitter).await),
+            (
+                "KeepScreenAwake",
+                self.keep_screen_awake_changed(emitter).await,
+            ),
+            (
+                "KeepRunningInTray",
+                self.keep_running_in_tray_changed(emitter).await,
+            ),
+        ] {
+            if let Err(e) = result {
+                eprintln!("failed to announce {name} changed: {e}");
+            }
+        }
     }
 }
 
