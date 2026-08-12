@@ -53,6 +53,8 @@ announcement is a diagnostic event, not a failed operation.
 - Repository: ~/Development/Code/sleep-block
 - VCS: git
 - Revision / checkpoint: 78f5e8b5e4ccfb1d1f401d7807411e84ee85bf28
+- Identity recheck: git log --format=%H, 2026-08-11 17:11, matches recorded revision 78f5e8b5e4ccfb1d1f401d7807411e84ee85bf28
+- Focused review: `git show 78f5e8b5e4ccfb1d1f401d7807411e84ee85bf28`; complete task diff reviewed for correctness, scope, tests, maintainability, and task boundary
 
 | Command | Working directory | Result | Observable evidence |
 |---|---|---|---|
@@ -79,13 +81,15 @@ that claims it.
 - Verified: 2026-08-11
 - Repository: ~/Development/Code/sleep-block
 - VCS: git
-- Revision / checkpoint: 78f5e8b5e4ccfb1d1f401d7807411e84ee85bf28
+- Revision / checkpoint: 58c2a5d98f1a55cfa0612363923621bc50183339
+- Identity recheck: git log --format=%H, 2026-08-11 17:11, matches recorded revision 58c2a5d98f1a55cfa0612363923621bc50183339
+- Focused review: `git show 58c2a5d98f1a55cfa0612363923621bc50183339`; complete task diff reviewed for correctness, scope, tests, maintainability, and task boundary
 
 | Command | Working directory | Result | Observable evidence |
 |---|---|---|---|
-| `make package` | . | PASS (exit 0) | container build: tests run, both arches packaged — `sleep-block-0.1.1-1.28.git78f5e8b.fc44.{x86_64,aarch64}.rpm` in `tmp/rpmbuild/RPMS/` |
-| `rpm -qp --qf '%{VERSION}-%{RELEASE}'` | . | PASS | `0.1.1-1.28.git78f5e8b.fc44` — release embeds the checkpoint commit |
-| `python3 -c "import rpm; rpm.labelCompare(...)"` | . | PASS (returns 1) | `1.28.git78f5e8b` orders after the previous build's `1.16.git1b83abf`, so the new package supersedes it |
+| `make package` | . | PASS (exit 0) | container build at source revision 78f5e8b: tests run, both arches packaged — `sleep-block-0.1.1-1.28.git78f5e8b.fc44.{x86_64,aarch64}.rpm` in `tmp/rpmbuild/RPMS/` |
+| `rpm -qp --qf '%{VERSION}-%{RELEASE}'` | . | PASS (exit 0) | `0.1.1-1.28.git78f5e8b.fc44` — release embeds the source commit |
+| `python3 -c "import rpm; rpm.labelCompare(...)"` | . | PASS (exit 0) | labelCompare returned 1: `1.28.git78f5e8b` orders after the previous build's `1.16.git1b83abf`, so the new package supersedes it |
 
 This run is the evidence row review 02's F-17 found missing: `make package`
 executed end-to-end at this phase's checkpoint, producing dual-arch RPMs whose
@@ -102,9 +106,9 @@ git-derived release supersedes the prior build. Satisfies **AC-35** and backs
 - Verified: 2026-08-11
 - Repository: ~/Development/Code/sleep-block
 - VCS: git
-- Revision / checkpoint: 78f5e8b5e4ccfb1d1f401d7807411e84ee85bf28
-- Identity recheck: git rev-parse HEAD, 2026-08-11, matches recorded revision 78f5e8b5e4ccfb1d1f401d7807411e84ee85bf28
-- Final aligned review: Plans/SleepBlock/reviews/04-sleepblock-code-review-2acf3a50..78f5e8b5.md; frozen: 2acf3a504436835b241ff97ef2a4ad3393d282cd..78f5e8b5e4ccfb1d1f401d7807411e84ee85bf28
+- Revision / checkpoint: e8d770af89c9efa968cab1f39b0c411ffa1a3abc
+- Identity recheck: git rev-parse HEAD, 2026-08-11 17:11, matches recorded revision e8d770af89c9efa968cab1f39b0c411ffa1a3abc
+- Final aligned review: Plans/SleepBlock/reviews/04-sleepblock-code-review-2acf3a50..78f5e8b5.md; frozen: 2acf3a504436835b241ff97ef2a4ad3393d282cd..e8d770af89c9efa968cab1f39b0c411ffa1a3abc
 
 | Command | Working directory | Result | Observable evidence |
 |---|---|---|---|
@@ -116,4 +120,4 @@ git-derived release supersedes the prior build. Satisfies **AC-35** and backs
 ### Completed task identities
 
 - `6.1`: `78f5e8b5e4ccfb1d1f401d7807411e84ee85bf28`
-- `6.2`: `78f5e8b5e4ccfb1d1f401d7807411e84ee85bf28`
+- `6.2`: `58c2a5d98f1a55cfa0612363923621bc50183339`
