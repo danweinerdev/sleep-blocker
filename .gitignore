@@ -1,3 +1,18 @@
 target/
 vendor/
 tmp/
+
+# Container builds run with the project directory as HOME and shed shell/tool
+# state here; editor and per-user tool config is likewise local-only.
+/.bash_profile
+/.bashrc
+/.claude/
+/.gitconfig
+/.gitmodules
+/.idea
+/.mcp.json
+/.profile
+/.ripgreprc
+/.vscode
+/.zprofile
+/.zshrc
