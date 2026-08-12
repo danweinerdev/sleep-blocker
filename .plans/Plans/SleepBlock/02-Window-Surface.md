@@ -3,7 +3,7 @@ title: "Window Surface"
 type: phase
 plan: "SleepBlock"
 phase: 2
-status: in-progress
+status: complete
 created: 2026-08-10
 updated: 2026-08-10
 deliverable: "An egui window exposing the sleep toggle and the optional screen-lock setting"
@@ -141,13 +141,13 @@ an edge drag. Both `min_inner_size` and `max_inner_size` must be pinned.
 - Identity recheck: git rev-parse 025c10c, 2026-08-10 21:05, matches recorded revision 025c10c6e3c57569a531baa69509576c167b05ca
 
 
+| Command | Working directory | Result | Observable evidence |
+|---|---|---|---|
+| `cargo build --release` | . | PASS (exit 0) | binary builds |
+| `cargo test --release` | . | PASS (exit 0) | 5 passed; 0 failed |
+
 ### Completed task identities
 
 - `2.1`: `70acc5209d1107b73d135dc2c9d3701618663a34`
 - `2.2`: `18801ae1d8880344e3856d907e2391a8d0c59397`
 - `2.3`: `025c10c6e3c57569a531baa69509576c167b05ca`
-
-| Command | Working directory | Result | Observable evidence |
-|---|---|---|---|
-| `cargo build --release` | . | PASS (exit 0) | binary builds |
-| `cargo test --release` | . | PASS (exit 0) | 5 passed; 0 failed |

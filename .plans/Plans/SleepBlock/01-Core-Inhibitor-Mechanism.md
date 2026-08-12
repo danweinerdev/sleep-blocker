@@ -3,7 +3,7 @@ title: "Core Inhibitor Mechanism"
 type: phase
 plan: "SleepBlock"
 phase: 1
-status: in-progress
+status: complete
 created: 2026-08-10
 updated: 2026-08-10
 deliverable: "A GUI-free crate that acquires and releases both inhibitors, with integration tests against live D-Bus services"
@@ -114,12 +114,12 @@ what it was written to call.
 - Identity recheck: git rev-parse 553f02d, 2026-08-10 21:05, matches recorded revision 553f02db97710586570fcd1e1bab5b773eac7cb9
 
 
-### Completed task identities
-
-- `1.1`: `bb60d3438f5958d583633491a9b7436e617b8c99`
-- `1.2`: `553f02db97710586570fcd1e1bab5b773eac7cb9`
-
 | Command | Working directory | Result | Observable evidence |
 |---|---|---|---|
 | `cargo test --release -- --test-threads=1` | . | PASS (exit 0) | 5 passed; 0 failed |
 | `cargo clippy --release --all-targets` | . | PASS (exit 0) | no warnings |
+
+### Completed task identities
+
+- `1.1`: `bb60d3438f5958d583633491a9b7436e617b8c99`
+- `1.2`: `553f02db97710586570fcd1e1bab5b773eac7cb9`

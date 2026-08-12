@@ -339,10 +339,10 @@ nothing.
 - `5.6`: `34418f1101978216f81388439c9a6d2aaa2f5585`
 - `5.7`: `ee0357134ba6f387d2b4e57eb4acb31d291296d4`
 
+### Completion caveat
+
 The two follow-ups this phase's reviews raised (F-16, F-17) moved to phase 6
 rather than being deferred inside a completed phase.
-
-### Completion caveat
 
 This phase was closed on an explicit user decision, not by satisfying the
 completion gate. Three four-lane reviews were run; none returned Aligned across

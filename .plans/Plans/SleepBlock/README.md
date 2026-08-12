@@ -9,22 +9,22 @@ related: [Specs/SleepBlock, Designs/SleepBlock]
 phases:
   - id: 1
     title: "Core Inhibitor Mechanism"
-    status: in-progress
+    status: complete
     doc: "01-Core-Inhibitor-Mechanism.md"
     depends_on: []
   - id: 2
     title: "Window Surface"
-    status: in-progress
+    status: complete
     doc: "02-Window-Surface.md"
     depends_on: [1]
   - id: 3
     title: "Tray Surface and Shared State"
-    status: in-progress
+    status: complete
     doc: "03-Tray-Surface-And-Shared-State.md"
     depends_on: [2]
   - id: 4
     title: "Packaging"
-    status: in-progress
+    status: complete
     doc: "04-Packaging.md"
     depends_on: [3]
   - id: 5

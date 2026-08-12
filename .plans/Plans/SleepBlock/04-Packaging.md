@@ -3,7 +3,7 @@ title: "Packaging"
 type: phase
 plan: "SleepBlock"
 phase: 4
-status: in-progress
+status: complete
 created: 2026-08-10
 updated: 2026-08-10
 deliverable: "A binary RPM built by `make package`, gated on tests, lint, and format checks"
@@ -86,11 +86,11 @@ or launchers show a generic placeholder.
 - Identity recheck: git rev-parse 38087c1, 2026-08-10 21:05, matches recorded revision 38087c19f6b02eb63a4541f03afd33821095f501
 
 
-### Completed task identities
-
-- `4.1`: `38087c19f6b02eb63a4541f03afd33821095f501`
-
 | Command | Working directory | Result | Observable evidence |
 |---|---|---|---|
 | `make package` | . | PASS (exit 0) | RPM written; all gates passed |
 | `cargo test --release` | . | PASS (exit 0) | 8 passed; 0 failed |
+
+### Completed task identities
+
+- `4.1`: `38087c19f6b02eb63a4541f03afd33821095f501`

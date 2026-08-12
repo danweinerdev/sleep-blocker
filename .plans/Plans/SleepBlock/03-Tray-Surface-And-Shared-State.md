@@ -3,7 +3,7 @@ title: "Tray Surface and Shared State"
 type: phase
 plan: "SleepBlock"
 phase: 3
-status: in-progress
+status: complete
 created: 2026-08-10
 updated: 2026-08-10
 deliverable: "A StatusNotifierItem tray icon that is an equal peer of the window, sharing one state handle"
@@ -169,13 +169,13 @@ tests exist to convert this into a build failure.
 - Identity recheck: git rev-parse 8a5e549, 2026-08-10 21:05, matches recorded revision 8a5e549a3535b654c2a6fdfbee5af6346b164b98
 
 
+| Command | Working directory | Result | Observable evidence |
+|---|---|---|---|
+| `cargo test --release` | . | PASS (exit 0) | 8 passed; 0 failed |
+| `cargo clippy --release --all-targets -- -D warnings` | . | PASS (exit 0) | no warnings |
+
 ### Completed task identities
 
 - `3.1`: `deebef794ef7119d5d8a58ec303007a037a79042`
 - `3.2`: `f307da466e3685ca49f9e97632175c60bf3043f3`
 - `3.3`: `8a5e549a3535b654c2a6fdfbee5af6346b164b98`
-
-| Command | Working directory | Result | Observable evidence |
-|---|---|---|---|
-| `cargo test --release` | . | PASS (exit 0) | 8 passed; 0 failed |
-| `cargo clippy --release --all-targets -- -D warnings` | . | PASS (exit 0) | no warnings |
