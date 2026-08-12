@@ -55,6 +55,8 @@ announcement is a diagnostic event, not a failed operation.
 - Revision / checkpoint: 78f5e8b5e4ccfb1d1f401d7807411e84ee85bf28
 - Identity recheck: git log --format=%H, 2026-08-11 17:11, matches recorded revision 78f5e8b5e4ccfb1d1f401d7807411e84ee85bf28
 - Focused review: `git show 78f5e8b5e4ccfb1d1f401d7807411e84ee85bf28`; complete task diff reviewed for correctness, scope, tests, maintainability, and task boundary
+- Reviewed candidate / final: 78f5e8b5e4ccfb1d1f401d7807411e84ee85bf28
+- Review result: PASS/Aligned
 
 | Command | Working directory | Result | Observable evidence |
 |---|---|---|---|
@@ -84,6 +86,8 @@ that claims it.
 - Revision / checkpoint: 58c2a5d98f1a55cfa0612363923621bc50183339
 - Identity recheck: git log --format=%H, 2026-08-11 17:11, matches recorded revision 58c2a5d98f1a55cfa0612363923621bc50183339
 - Focused review: `git show 58c2a5d98f1a55cfa0612363923621bc50183339`; complete task diff reviewed for correctness, scope, tests, maintainability, and task boundary
+- Reviewed candidate / final: 58c2a5d98f1a55cfa0612363923621bc50183339
+- Review result: PASS/Aligned
 
 | Command | Working directory | Result | Observable evidence |
 |---|---|---|---|
