@@ -5,11 +5,16 @@ Cargo.toml's `[workspace.package] version` is the single source of truth. The
 RPM spec takes its version as a define from the Makefile, so nothing else needs
 editing and the two cannot drift.
 
-The ordering matters: the version is written first (the packages must carry the
-new number), then the full containerized build and test runs, and only if that
-succeeds are the commit and tag created. A failure leaves the working tree
-dirty but the history untouched, so the fix is `git checkout Cargo.toml` rather
-than unwinding a bad commit or deleting a published tag.
+The ordering matters: the version is committed and tagged first, and the build
+runs against that tagged tree — that is what makes the Makefile derive a clean
+`-1` RPM release instead of a `.dirty`-suffixed snapshot. A release built
+before its commit would permanently carry the previous commit's id plus a
+dirty marker, which misdescribes the artifact.
+
+The trade is that a build failure must unwind: the script deletes the tag and
+resets the release commit away, restoring the exact pre-bump state. That is
+safe because both are local until pushed, and the push instruction is only
+printed on success.
 
 Usage:
     scripts/bump-version.py <major|minor|patch> [--dry-run] [--no-verify]
@@ -140,23 +145,35 @@ def main() -> int:
         ensure_clean_worktree()
         ensure_tag_available(tag)
 
-        # Written before building so the packages carry the new version.
         write_version(new_version)
         print(f"==> Wrote {new_version} to {CARGO_TOML.name}")
+
+        # Cargo.lock records the workspace version; syncing it here keeps the
+        # release commit complete, since the build now runs after the commit.
+        run(["cargo", "update", "--workspace"])
+
+        # Commit and tag before building: the Makefile derives the RPM release
+        # from `git describe`, so building at the tagged commit is what
+        # produces a clean `<version>-1` instead of a dirty snapshot id.
+        run(["git", "add", "Cargo.toml", "Cargo.lock"])
+        run(["git", "commit", "-m", f"Release {new_version}"])
+        run(["git", "tag", "-a", tag, "-m", f"Release {new_version}"])
 
         if args.no_verify:
             print("==> Skipping verification (--no-verify)")
         else:
             # `make package` builds and tests the native architecture, then
-            # cross-builds and packages both. If any of that fails the exception
-            # propagates and nothing is committed or tagged.
-            print("==> Building and packaging (this runs the full test suite)")
-            run(["make", "package"])
-
-        # Cargo.lock records the workspace version, so it moves with the bump.
-        run(["git", "add", "Cargo.toml", "Cargo.lock"])
-        run(["git", "commit", "-m", f"Release {new_version}"])
-        run(["git", "tag", "-a", tag, "-m", f"Release {new_version}"])
+            # cross-builds and packages both. On failure, unwind the release:
+            # delete the tag and reset the commit so the tree returns to the
+            # exact pre-bump state. Both are local-only at this point.
+            print("==> Building and packaging at the tagged tree")
+            try:
+                run(["make", "package"])
+            except subprocess.CalledProcessError:
+                print("==> Build failed; reverting the release commit and tag")
+                run(["git", "tag", "-d", tag])
+                run(["git", "reset", "--hard", "HEAD^"])
+                raise
 
         print(f"\n==> Committed and tagged {tag}")
         print(f"    Push with: git push && git push origin {tag}")
@@ -168,9 +185,9 @@ def main() -> int:
     except subprocess.CalledProcessError as e:
         print(
             f"\nerror: `{' '.join(e.cmd)}` failed with exit status {e.returncode}.\n"
-            f"       {CARGO_TOML.name} has been updated but nothing was committed "
-            "or tagged.\n"
-            f"       Revert with: git checkout {CARGO_TOML.name}",
+            "       If the failure happened during the build, the release "
+            "commit and tag\n"
+            "       were reverted and the tree is back at its pre-bump state.",
             file=sys.stderr,
         )
         return e.returncode
