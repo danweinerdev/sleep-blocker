@@ -2,8 +2,8 @@ target/
 vendor/
 tmp/
 
-# Container builds run with the project directory as HOME and shed shell/tool
-# state here; editor and per-user tool config is likewise local-only.
+# Shell, editor, and per-user tool state that belongs to the local machine,
+# not the project. An unclean worktree also blocks the phase completion gate.
 /.bash_profile
 /.bashrc
 /.claude/
